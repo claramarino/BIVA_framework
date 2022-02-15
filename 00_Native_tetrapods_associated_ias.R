@@ -68,7 +68,7 @@ df_birds <- left_join(df_birds, cate_all, by="binomial")
 # keep presence =1, origin = 1 ou 2, seasonal = 1
 df_birds <- df_birds %>% filter(presence==1) %>%
   filter(origin==1 | origin==2) %>%
-  filter(seasonal==1)
+  filter(seasonal %in% c(1:3))
 # remove useless columns and duplicates
 df_birds <- df_birds %>% 
   select(binomial, insular_endemic:category) %>%
@@ -105,7 +105,7 @@ df_mam$insular_endemic[is.na(df_mam$insular_endemic)] <- 1
 # keep presence =1, origin = 1 ou 2, seasonal = 1
 df_mam <- df_mam %>% filter(presence==1) %>%
   filter(origin==1 | origin==2) %>%
-  filter(seasonal==1)
+  filter(seasonal %in% c(1:3))
 # retirer les colones inutiles et les doublons
 df_mam <- df_mam %>% 
   select(binomial, kingdom:category, insular_endemic) %>%
@@ -144,7 +144,7 @@ df_amphi$insular_endemic[is.na(df_amphi$insular_endemic)] <- 1
 # keep presence =1, origin = 1 ou 2, seasonal = 1
 df_amphi <- df_amphi %>% filter(presence==1) %>%
   filter(origin==1 | origin==2) %>%
-  filter(seasonal==1)
+  filter(seasonal %in% c(1:3))
 # retirer les colones inutiles et les doublons
 df_amphi <- df_amphi %>% 
   select(binomial, kingdom:category, insular_endemic) %>%
@@ -308,7 +308,6 @@ df_all <- bind_rows(df_birds %>%
                       mutate(binomial_iucn = binomial) %>%
                       rename(order = order_) %>%
                       select(-class))
-6933+10361+5786+7779
 
 # ------Load threat------
 threat_amr <- read.csv("Data/threats_amph_mam_rept_IUCN_2020_12.csv") 
@@ -324,5 +323,145 @@ threat <- bind_rows(threat_amr, threat_bp, threat_bnp)
 
 rm(threat_amr, threat_bnp, threat_bp)
 
+# clean threat data
+
+threat_ias <- threat %>% 
+  filter(timing!="Future") %>% # remove future threats
+  mutate(code_sub = substr(code, 1, 3)) %>% 
+  mutate(code_sub = as.numeric(code_sub),
+         all_8 = if_else(code_sub>8 & code_sub<9, 1,0), # check all threat 8
+         ias_8.1 = if_else(code_sub==8.1, 1,0)) %>%
+  distinct(scientificName, all_8, ias_8.1, ias)
+table(threat_ias$ias_8.1)
+
+ias_to_check <- threat_ias %>% filter(all_8==1 & ias_8.1 ==0)
+ias_verif <- threat_ias %>% filter(ias_8.1==1)
+
+# look for species in ias_to_check not present in ias_verif
+# permit to see species in cate 8.2/ 8.4 which are not in 8.1
+diff <- setdiff(unique(ias_to_check$scientificName) ,
+                unique(ias_verif$scientificName))
+
+# select those species to be sure they are not threatened by IAS
+ias_to_check_real <- ias_to_check %>% filter(scientificName %in% diff)
+# extract all ias names for IAS.8.1 exposed species
+threat2 <- threat %>% 
+  filter(timing!="Future") %>% # remove future threats
+  mutate(code_sub = substr(code, 1, 3)) %>% 
+  mutate(code_sub = as.numeric(code_sub),
+         all_8 = if_else(code_sub>8 & code_sub<9, 1,0), # check all threat 8
+         ias_8.1 = if_else(code_sub==8.1, 1,0))
+ias_name <- pull(threat2 %>% filter(ias_8.1==1) %>% distinct(ias), ias)
+# remove empty name ""
+ias_name <- ias_name[2:length(ias_name)]
+
+ias_to_check <- threat2 %>% filter(all_8==1 & ias_8.1 ==0)
+ias_verif <- threat2 %>% filter(ias_8.1==1)
+ias_to_check_real <- ias_to_check %>% filter(scientificName %in% diff)
+
+sp_with_named_ias <- unique(pull(ias_to_check_real %>%
+                                   filter(ias %in% ias_name), scientificName))
+
+threat_ias <- threat_ias %>% 
+  mutate(ias_8.1=if_else(scientificName %in% sp_with_named_ias, 1, ias_8.1))
+table(threat_ias$ias_8.1)
+
+
+#count all ias-t species (but not all have an associated ias)
+sp_threat_ias <- threat_ias %>%
+  group_by(scientificName) %>%
+  summarise(ias_8.1 = sum(ias_8.1)) %>%
+  mutate(ias_8.1=if_else(ias_8.1==0,0,1))
+table(sp_threat_ias$ias_8.1)
+# keep in mind that only tetrapods with details on threat are in this df
+# it represents 15 658 sp with IUCN 2020-3 MAJ
+
 #------- Find associated ias --------
+
+# select only 8.1 species (after the cleaning of 8.1 + 8.4 with named ias)
+
+ias_x_native <- left_join(
+  threat_ias %>%
+    filter(ias_8.1==1) %>%
+    filter(ias %in% ias_name) %>%
+    rename(binomial_iucn = scientificName),
+  df_all, by = "binomial_iucn") %>%
+  mutate(
+    ias_lower = tolower(ias),
+    ias_simple = if_else(grepl("rattus", ias_lower), "rattus spp", ias_lower),
+    ias_simple = if_else(grepl("herpest", ias_lower), "herpestidae", ias_simple))
+
+length(unique(ias_x_native$binomial_iucn))
+hist(table(ias_x_native$ias))
+
+length(unique(ias_x_native$ias[ias_x_native$Class=="Aves"]))
+length(unique(ias_x_native$ias[ias_x_native$Class=="Amphibia"]))
+length(unique(ias_x_native$ias[ias_x_native$Class=="Reptilia"]))
+length(unique(ias_x_native$ias[ias_x_native$Class=="Mammalia"]))
+
+length(unique(ias_x_native$ias_simple))
+dim(ias_x_native %>% distinct(ias_simple, binomial_iucn))
+
+length(unique(ias_x_native$ias_simple[ias_x_native$Class=="Aves"]))
+length(unique(ias_x_native$ias_simple[ias_x_native$Class=="Amphibia"]))
+length(unique(ias_x_native$ias_simple[ias_x_native$Class=="Reptilia"]))
+length(unique(ias_x_native$ias_simple[ias_x_native$Class=="Mammalia"]))
+
+
+# remove all sp associated to an unspecified ias
+# except rattus & herpestes
+
+ias_x_native_spe <- ias_x_native %>%
+  filter(!grepl("unspecified",ias_simple))
+
+length(unique(ias_x_native_spe$binomial_iucn))
+dim(ias_x_native_spe %>% distinct(ias, binomial_iucn))
+
+length(unique(ias_x_native_spe$ias[ias_x_native_spe$Class=="Aves"]))
+length(unique(ias_x_native_spe$ias[ias_x_native_spe$Class=="Amphibia"]))
+length(unique(ias_x_native_spe$ias[ias_x_native_spe$Class=="Reptilia"]))
+length(unique(ias_x_native_spe$ias[ias_x_native_spe$Class=="Mammalia"]))
+
+length(unique(ias_x_native_spe$ias_simple))
+dim(ias_x_native_spe %>% distinct(ias_simple, binomial_iucn))
+
+length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Aves"]))
+length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Amphibia"]))
+length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Reptilia"]))
+length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Mammalia"]))
+
+library(igraph)
+library(bipartite)
+library(tidyverse)
+
+
+mat_net_list <- vector(mode = "list", length = 4)
+names(mat_net_list) <- c("Amphibia","Aves","Mammalia","Reptilia")
+
+# some sp are associated to an ias but don't have a class
+# because they are EX/EW and were removed from df_all
+dim(ias_x_native_spe %>% filter(is.na(Class)) %>% distinct(binomial_iucn))
+
+
+for (i in names(mat_net_list)){
+  mat_net_list[[i]] <- ias_x_native_spe %>%
+    filter(Class == i) %>%
+    distinct(binomial_iucn, ias_simple) %>%
+    mutate(count = 1) %>%
+    pivot_wider(names_from = ias_simple, 
+                values_from = count, values_fill = 0) %>%
+    column_to_rownames("binomial_iucn")
+}
+mat_net <- ias_x_native_spe %>%
+  distinct(binomial_iucn, ias_simple) %>%
+  mutate(count = 1) %>%
+  pivot_wider(names_from = ias_simple, 
+              values_from = count, values_fill = 0) %>%
+  column_to_rownames("binomial_iucn")
+
+plotweb(mat_net)
+visweb(mat_net)
+
+
+
 
