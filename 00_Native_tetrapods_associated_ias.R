@@ -452,6 +452,8 @@ for (i in names(mat_net_list)){
                 values_from = count, values_fill = 0) %>%
     column_to_rownames("binomial_iucn")
 }
+
+
 mat_net <- ias_x_native_spe %>%
   distinct(binomial_iucn, ias_simple) %>%
   mutate(count = 1) %>%
@@ -459,9 +461,125 @@ mat_net <- ias_x_native_spe %>%
               values_from = count, values_fill = 0) %>%
   column_to_rownames("binomial_iucn")
 
-plotweb(mat_net)
-visweb(mat_net)
+library(igraph)
+library(blockmodels)
 
 
+my_model <- BM_bernoulli("LBM",M )
+my_model$estimate()
+which.max(my_model$ICL)
+
+adjm <- adjm.metaweb.diets[, rownames(adjm.metaweb.diets)] ## make sure rows and columns in same order 
+
+adj.matrix <- lapply(mat_net_list, as.matrix) ## convert to matrix format. 
+
+#adj.matrix <- apply(adj.matrix, 2, as.numeric) # make sure elements are numeric!
+#rownames(adj.matrix) <- colnames(adj.matrix)  
+#diag(adj.matrix) <- 0 ## remove cannibalistic links
+
+lapply(adj.matrix, sum) ## look at number of interactions (if matrix is binary)
+
+# build LBM on adjacency matrix => for bipartite network use "LBM" method
+model_list <- lapply(adj.matrix, function(x){
+  BM_bernoulli(membership_type = "LBM", adj = x, explore_min=20, explore_max = 30)
+})
+
+# explore outputs of model 
+# model_list[["Amphibia"]]$estimate()
+# model_list[["Aves"]]$estimate()
+# model_list[["Mammalia"]]$estimate()
+# model_list[["Reptilia"]]$estimate()
+
+lapply(model_list, function(x) x$estimate())
+
+# retrieve best model = which maximizes the ICL 
+Qbest <- lapply(model_list, function(x) which.max(x$ICL))
+Qbest
+
+plot(model_list[["Amphibia"]]$plot_parameters)
+
+model_list[["Amphibia"]]$memberships[[Qbest[["Amphibia"]]]]$plot()
+model_list[["Aves"]]$memberships[[Qbest[["Aves"]]]]$plot()
+model_list[["Mammalia"]]$memberships[[Qbest[["Mammalia"]]]]$plot()
+model_list[["Reptilia"]]$memberships[[Qbest[["Reptilia"]]]]$plot()
 
 
+#### species x groups membership table 
+spp_groups <- model$memberships[[Qbest]]$Z ## this is the species x groups table (with probabilities of membership)
+spp_groups <- as.data.frame(spp_groups)
+rownames(spp_groups) <- rownames(adj.matrix)
+
+spp_groups <- Qbest
+for (i in 1:length(model_list)){
+  spp_groups <- model_list[[i]]$memberships[[Qbest[[i]]]]$Z ## this is the species x groups table (with probabilities of membership)
+  spp_groups <- as.data.frame(spp_groups)
+  rownames(spp_groups) <- rownames(adj.matrix[[i]])
+}
+
+## transform to binary species x group membership
+# species belongs to group with maximum probability of membership  (proba ~ 0.99) (else membership = e-05)
+colnames(spp_groups) <- 1:Qbest
+species.groups <- data.frame(species = rownames(adj.matrix), 
+                             group = NA)
+
+rownames(species.groups) <- species.groups$species
+for (s in rownames(spp_groups)){
+  species.groups[s, "group"] <- as.numeric(which.max(spp_groups[s, ]))
+}
+
+
+###### groups x groups probability interactions = new adjacency matrix at the level of trophic groups 
+# Pi = Probability of interactions between classes 
+Pi <- model$model_parameters[[Qbest]]$pi
+
+rownames(Pi) <- 1:Qbest
+colnames(Pi) <- 1:Qbest
+
+library(sna)
+g.p<-sapply(runif(20,0,1),rep,20)  #Create a matrix of edge 
+#probabilities
+g<-rgraph(20,tprob=g.p)            #Draw from a Bernoulli graph 
+#distribution
+g_mam <- as.matrix(mat_net_list$Mammalia)
+
+#Cluster based on structural equivalence
+eq<-equiv.clust(g_mam)
+plot(eq)
+
+#Form a blockmodel with distance relaxation of 10
+b<-blockmodel(g_mam,eq,h=10, block.content = "density")
+
+b$block.membership
+length(unique(b$block.membership))
+max(b$block.membership)
+# les espèces sont organisées en 35 blocks? 
+# attention = dpdt de la distance de relaxation
+# en tout il y a 393 identités = 304 natives + 89 IAS
+
+b$block.content
+b$order.vector
+length(unique(b$order.vector))
+304+89
+
+View(b$blocked.data)
+View(b$block.model)
+
+b$rlabels
+b$cluster.method
+b$equiv.fun
+b$equiv.metric
+
+
+plot(b)
+
+#bipartite
+library(bipartite)
+mod <- computeModules(g_mam)
+plotModuleWeb(mod)
+
+View(mod@moduleWeb)
+View(mod@originalWeb)
+dim(mod@modules)
+mod@orderA
+mod@orderB
+mod@likelihood
