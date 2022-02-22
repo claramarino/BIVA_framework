@@ -16,6 +16,7 @@ library(sf)
 library(rgdal)
 library(dplyr)
 library(rredlist)
+library(tidyverse)
 
 
 ##############################################################
@@ -331,7 +332,7 @@ threat_ias <- threat %>%
   mutate(code_sub = as.numeric(code_sub),
          all_8 = if_else(code_sub>8 & code_sub<9, 1,0), # check all threat 8
          ias_8.1 = if_else(code_sub==8.1, 1,0)) %>%
-  distinct(scientificName, all_8, ias_8.1, ias)
+  distinct(scientificName, all_8, ias_8.1, ias, stressName, scope, severity, timing)
 table(threat_ias$ias_8.1)
 
 ias_to_check <- threat_ias %>% filter(all_8==1 & ias_8.1 ==0)
@@ -430,10 +431,10 @@ length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Amphibia"]))
 length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Reptilia"]))
 length(unique(ias_x_native_spe$ias_simple[ias_x_native_spe$Class=="Mammalia"]))
 
-library(igraph)
-library(bipartite)
-library(tidyverse)
 
+# Create adjency matrix for each class
+# columns = ias, rows = natives
+# keep unspecified species for first check
 
 mat_net_list <- vector(mode = "list", length = 4)
 names(mat_net_list) <- c("Amphibia","Aves","Mammalia","Reptilia")
@@ -444,26 +445,187 @@ dim(ias_x_native_spe %>% filter(is.na(Class)) %>% distinct(binomial_iucn))
 
 
 for (i in names(mat_net_list)){
+  # mat_net_list[[i]] <- ias_x_native %>%
+  #   filter(Class == i) %>%
+  #   distinct(binomial_iucn, ias_lower) %>%
+  #   mutate(count = 1) %>%
+  #   pivot_wider(names_from = ias_lower, 
+  #               values_from = count, values_fill = 0) %>%
+  #   column_to_rownames("binomial_iucn")
+  
+  # if remove unspecified species
+
   mat_net_list[[i]] <- ias_x_native_spe %>%
     filter(Class == i) %>%
     distinct(binomial_iucn, ias_simple) %>%
     mutate(count = 1) %>%
-    pivot_wider(names_from = ias_simple, 
+    pivot_wider(names_from = ias_simple,
                 values_from = count, values_fill = 0) %>%
     column_to_rownames("binomial_iucn")
 }
 
+#majority <- c("Majority (50-90%)", "Whole (>90%)")
+severe_inter <- c("Very Rapid Declines", "Slow, Significant Declines", 
+                  "Rapid Declines") # , "Causing/Could cause fluctuations"
 
-mat_net <- ias_x_native_spe %>%
-  distinct(binomial_iucn, ias_simple) %>%
-  mutate(count = 1) %>%
-  pivot_wider(names_from = ias_simple, 
-              values_from = count, values_fill = 0) %>%
-  column_to_rownames("binomial_iucn")
+# significant interactions
+ias_x_native_spe_signif <- ias_x_native_spe %>%
+  filter(severity %in% severe_inter) #%>%
+  #filter(scope %in% majority)
+# severity 
+# scope
+
+mat_net_list_signif <- vector(mode = "list", length = 4)
+names(mat_net_list_signif) <- c("Amphibia","Aves","Mammalia","Reptilia")
+
+for (i in names(mat_net_list_signif)){
+  #  remove unspecified species
+  # keep only significant interactions
+    mat_net_list_signif[[i]] <- ias_x_native_spe_signif %>%
+    filter(Class == i) %>%
+    distinct(binomial_iucn, ias_simple) %>%
+    mutate(count = 1) %>%
+    pivot_wider(names_from = ias_simple,
+                values_from = count, values_fill = 0) %>%
+    column_to_rownames("binomial_iucn")
+}
+
+############## Use bipartite package ################
+
+#bipartite
+library(bipartite)
+
+adj.matrix <- lapply(mat_net_list_signif, as.matrix)
+lapply(adj.matrix, sum) # number of interactions
+
+Sys.time()
+mod_list <- lapply(adj.matrix, computeModules) # 19 min
+Sys.time()
+
+modules_list <- lapply(mod_list, listModuleInformation)
+
+# count number of groups for each class
+lapply(modules_list, function(x) length(x[[2]]))
+
+#attribute module to each sp
+gps_class <- vector(mode = "list", length = 4)
+names(gps_class) <- c("Amphibia","Aves","Mammalia","Reptilia")
+
+for (i in names(mat_net_list_signif)){
+  gps_class[[i]] <- ias_x_native_spe_signif %>%
+    filter(Class == i) %>%
+    mutate(module_native = numeric(length(binomial_iucn)),
+           module_ias = numeric(length(binomial_iucn)))
+  
+  for (j in 1:nrow(gps_class[[i]])){
+    gps_class[[i]]$module_native[j] = 
+      which(grepl(gps_class[[i]]$binomial_iucn[j], modules_list[[i]][[2]]))
+    gps_class[[i]]$module_ias[j] = 
+      which(grepl(gps_class[[i]]$ias_simple[j], modules_list[[i]][[2]]))
+  }
+}
+
+
+
+
+
+# see if groups are reciprocal 
+ggplot(data = gps_mam, aes(x = module_ias, y = module_native)) +
+  geom_point(position = "jitter")
+
+# take into account number of interactions
+nb_inter_ias <- gps_mam %>%
+  group_by(ias_simple) %>%
+  summarize(count_inter_ias = n())
+nb_inter_native <- gps_mam %>%
+  group_by(binomial_iucn) %>%
+  summarize(count_inter_native = n())
+
+gps_mam_inter <- left_join(left_join(gps_mam, nb_inter_ias, by="ias_simple"), 
+                           nb_inter_native, by = "binomial_iucn")
+
+pias <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
+                                         color = count_inter_ias)) +
+  geom_point(position = "jitter")
+
+pnat <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
+                                         color = count_inter_native)) +
+  geom_point(position = "jitter")
+library(ggpubr)
+
+ggarrange(pias, pnat)
+
+
+
+
+# test with mam only 
+
+g_mam <- as.matrix(mat_net_list$Mammalia)
+# mod <- computeModules(g_mam)
+# saveRDS(mod, "Output/00_module_bipartite_web_mam")
+mod <- readRDS("Output/00_module_bipartite_web_mam")
+
+plotModuleWeb(mod)
+
+module_list = listModuleInformation(mod)
+printoutModuleInformation(mod)
+
+View(mod@moduleWeb)
+View(mod@originalWeb)
+View(mod@modules)
+dim(mod@modules)
+
+mod@orderA
+mod@orderB
+mod@likelihood
+
+module_list[[2]][[1]][[1]]
+
+# attribute to each ias / native its group
+gps_mam <- ias_x_native_spe %>%
+  filter(Class=="Mammalia") %>%
+  mutate(module_native = numeric(nrow(ias_x_native_spe)),
+         module_ias = numeric(nrow(ias_x_native_spe)))
+
+for (i in 1:nrow(gps_mam)){
+  gps_mam$module_native[i] = which(grepl(gps_mam$binomial_iucn[i], module_list[[2]]))
+  gps_mam$module_ias[i] = which(grepl(gps_mam$ias_simple[i], module_list[[2]]))
+}
+  
+# see if groups are reciprocal 
+ggplot(data = gps_mam, aes(x = module_ias, y = module_native)) +
+  geom_point(position = "jitter")
+
+# take into account number of interactions
+nb_inter_ias <- gps_mam %>%
+  group_by(ias_simple) %>%
+  summarize(count_inter_ias = n())
+nb_inter_native <- gps_mam %>%
+  group_by(binomial_iucn) %>%
+  summarize(count_inter_native = n())
+
+gps_mam_inter <- left_join(left_join(gps_mam, nb_inter_ias, by="ias_simple"), 
+                           nb_inter_native, by = "binomial_iucn")
+
+pias <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
+                                 color = count_inter_ias)) +
+  geom_point(position = "jitter")
+
+pnat <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
+                                 color = count_inter_native)) +
+  geom_point(position = "jitter")
+library(ggpubr)
+
+ggarrange(pias, pnat)
+
+
+
+############## Use blockmodels as in O'connor et al 2020 ################
 
 library(igraph)
+library(tidyverse)
 library(blockmodels)
-
+library(sna)
 
 my_model <- BM_bernoulli("LBM",M )
 my_model$estimate()
@@ -535,7 +697,6 @@ Pi <- model$model_parameters[[Qbest]]$pi
 rownames(Pi) <- 1:Qbest
 colnames(Pi) <- 1:Qbest
 
-library(sna)
 g.p<-sapply(runif(20,0,1),rep,20)  #Create a matrix of edge 
 #probabilities
 g<-rgraph(20,tprob=g.p)            #Draw from a Bernoulli graph 
@@ -572,14 +733,3 @@ b$equiv.metric
 
 plot(b)
 
-#bipartite
-library(bipartite)
-mod <- computeModules(g_mam)
-plotModuleWeb(mod)
-
-View(mod@moduleWeb)
-View(mod@originalWeb)
-dim(mod@modules)
-mod@orderA
-mod@orderB
-mod@likelihood
