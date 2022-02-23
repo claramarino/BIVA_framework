@@ -466,7 +466,7 @@ for (i in names(mat_net_list)){
 
 #majority <- c("Majority (50-90%)", "Whole (>90%)")
 severe_inter <- c("Very Rapid Declines", "Slow, Significant Declines", 
-                  "Rapid Declines") # , "Causing/Could cause fluctuations"
+                  "Rapid Declines", "Causing/Could cause fluctuations")
 
 # significant interactions
 ias_x_native_spe_signif <- ias_x_native_spe %>%
@@ -499,8 +499,13 @@ adj.matrix <- lapply(mat_net_list_signif, as.matrix)
 lapply(adj.matrix, sum) # number of interactions
 
 Sys.time()
-mod_list <- lapply(adj.matrix, computeModules) # 19 min
+# mod_list <- lapply(adj.matrix, computeModules)
+# 19 min with scope & severity filtered
+# 3h with severity only
 Sys.time()
+# saveRDS(mod_list, "Output/00_module_bipartite_tetrap_severe")
+
+mod_list <- readRDS("Output/00_module_bipartite_tetrap_severe")
 
 modules_list <- lapply(mod_list, listModuleInformation)
 
@@ -514,6 +519,8 @@ names(gps_class) <- c("Amphibia","Aves","Mammalia","Reptilia")
 for (i in names(mat_net_list_signif)){
   gps_class[[i]] <- ias_x_native_spe_signif %>%
     filter(Class == i) %>%
+    filter(category != "EX") %>% # pbm EX EW in reptiles
+    filter(category != "EW") %>%
     mutate(module_native = numeric(length(binomial_iucn)),
            module_ias = numeric(length(binomial_iucn)))
   
@@ -525,38 +532,188 @@ for (i in names(mat_net_list_signif)){
   }
 }
 
-
-
-
-
 # see if groups are reciprocal 
-ggplot(data = gps_mam, aes(x = module_ias, y = module_native)) +
-  geom_point(position = "jitter")
+p_class <- lapply(gps_class, function(x){
+  ggplot(data = x, aes(x = module_ias, y = module_native)) +
+    geom_point(position = "jitter")
+})
+
+library(ggpubr)
+ggarrange(p_class$Amphibia, p_class$Aves,
+          p_class$Mammalia, p_class$Reptilia,
+          ncol = 2, nrow = 2)
+
+i="Reptilia" # "Amphibia", "Aves", "Mammalia"
+m = as.matrix(table(gps_class[[i]]$module_native, gps_class[[i]]$module_ias))
+plotweb(m)
+
 
 # take into account number of interactions
-nb_inter_ias <- gps_mam %>%
-  group_by(ias_simple) %>%
-  summarize(count_inter_ias = n())
-nb_inter_native <- gps_mam %>%
-  group_by(binomial_iucn) %>%
-  summarize(count_inter_native = n())
+gps_inter <- lapply(gps_class, function(x){
+  nb_inter_ias <- x %>%
+    group_by(ias_simple) %>%
+    summarize(count_inter_ias = n())
+  nb_inter_native <- x %>%
+    group_by(binomial_iucn) %>%
+    summarize(count_inter_native = n())
+  
+  gps_inter <- left_join(left_join(x, nb_inter_ias, by="ias_simple"), 
+                             nb_inter_native, by = "binomial_iucn")
+  return(gps_inter)
+})
 
-gps_mam_inter <- left_join(left_join(gps_mam, nb_inter_ias, by="ias_simple"), 
-                           nb_inter_native, by = "binomial_iucn")
+pias <- lapply(gps_inter, function(x){
+  ggplot(data = x, aes(x = module_ias, y = module_native,
+                                   color = count_inter_ias)) +
+    geom_point(position = "jitter")
+})
 
-pias <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
-                                         color = count_inter_ias)) +
-  geom_point(position = "jitter")
+pnat <- lapply(gps_inter, function(x){
+  ggplot(data = x, aes(x = module_ias, y = module_native,
+                                   color = count_inter_native)) +
+    geom_point(position = "jitter")
+})
 
-pnat <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
-                                         color = count_inter_native)) +
-  geom_point(position = "jitter")
-library(ggpubr)
-
-ggarrange(pias, pnat)
+ggarrange(pias$Amphibia, pnat$Amphibia)
+ggarrange(pias$Aves, pnat$Aves)
+ggarrange(pias$Mammalia, pnat$Mammalia)
+ggarrange(pias$Reptilia, pnat$Reptilia)
 
 
+# see if less interaction using genus ? families ?
 
+fam_net_list_signif = list()
+genus_net_list_signif = list()
+
+for (i in names(mat_net_list_signif)){
+  # native genus
+  genus_net_list_signif[[i]] <- ias_x_native_spe_signif %>%
+    filter(Class == i) %>%
+    filter(category != "EX") %>% # pbm EX EW in reptiles
+    filter(category != "EW") %>%
+    distinct() %>%
+    select(genus, ias_simple) %>%
+    mutate(count = 1) %>%
+    group_by(genus, ias_simple) %>%
+    summarise(ninter = sum(count)) %>%
+    pivot_wider(names_from = ias_simple,
+                values_from = ninter, values_fill = 0) %>%
+    column_to_rownames("genus")
+  # native family
+  fam_net_list_signif[[i]]<- ias_x_native_spe_signif %>%
+    filter(Class == i) %>%
+    filter(category != "EX") %>% # pbm EX EW in reptiles
+    filter(category != "EW") %>%
+    distinct() %>%
+    select(family, ias_simple) %>%
+    mutate(count = 1) %>%
+    group_by(family, ias_simple) %>%
+    summarise(ninter = sum(count)) %>%
+    pivot_wider(names_from = ias_simple,
+                values_from = ninter, values_fill = 0) %>%
+    column_to_rownames("family")
+}
+
+
+
+adj.matrix.fam <- lapply(fam_net_list_signif, as.matrix)
+lapply(adj.matrix.fam, sum) # number of interactions
+plotweb(adj.matrix.fam$Amphibia)
+plotweb(adj.matrix.fam$Aves)
+plotweb(adj.matrix.fam$Mammalia)
+plotweb(adj.matrix.fam$Reptilia)
+
+
+adj.matrix.gen <- lapply(genus_net_list_signif, as.matrix)
+lapply(adj.matrix.gen, sum) # number of interactions
+
+
+
+# utilisation du mécanisme
+
+table(gps_inter$Amphibia$stressName)
+unique(gps_inter$Aves$stressName)
+table(gps_inter$Mammalia$stressName, gps_inter$Mammalia$ias_simple)
+table(gps_inter$Reptilia$stressName)
+
+# globalement les IAS sont dans une caté de méca 
+# et les méca ne sont pas exclusifs par interaction
+# il peut y avoir plusieurs méca pour une interaction native x ias
+
+
+# est ce que dans les modules les espèces natives sont de même famille ?
+
+table(gps_inter$Amphibia$module_native, gps_inter$Amphibia$family)
+table(gps_inter$Aves$module_native, gps_inter$Aves$family)
+table(gps_inter$Mammalia$module_native, gps_inter$Mammalia$family)
+table(gps_inter$Reptilia$module_native, gps_inter$Reptilia$family)
+
+# est-ce qu'il y a un lien entre module et insular endemic ?
+table(gps_inter$Amphibia$module_native, gps_inter$Amphibia$insular_endemic)
+table(gps_inter$Aves$module_native, gps_inter$Aves$insular_endemic)
+table(gps_inter$Mammalia$module_native, gps_inter$Mammalia$insular_endemic)
+table(gps_inter$Reptilia$module_native, gps_inter$Reptilia$insular_endemic)
+
+# test de chi2 (!! wrong test because too small sample for some gps)
+chisq.test(table(gps_inter$Amphibia$module_native, gps_inter$Amphibia$insular_endemic))
+chisq.test(table(gps_inter$Aves$module_native, gps_inter$Aves$insular_endemic))
+chisq.test(table(gps_inter$Mammalia$module_native, gps_inter$Mammalia$insular_endemic))
+chisq.test(table(gps_inter$Reptilia$module_native, gps_inter$Reptilia$insular_endemic))
+
+
+# est-ce qu'il y a un lien entre module et category iucn ?
+table(gps_inter$Amphibia$module_native, gps_inter$Amphibia$category)
+table(gps_inter$Aves$module_native, gps_inter$Aves$category)
+table(gps_inter$Mammalia$module_native, gps_inter$Mammalia$category)
+table(gps_inter$Reptilia$module_native, gps_inter$Reptilia$category)
+
+# test avec le module de l'ias
+# est-ce qu'il y a un lien entre module ias et insular ?
+table(gps_inter$Amphibia$module_ias, gps_inter$Amphibia$insular_endemic)
+table(gps_inter$Aves$module_ias, gps_inter$Aves$insular_endemic)
+table(gps_inter$Mammalia$module_ias, gps_inter$Mammalia$insular_endemic)
+table(gps_inter$Reptilia$module_ias, gps_inter$Reptilia$insular_endemic)
+
+
+View(gps_inter$Aves)
+
+
+
+
+# nb de natives associées à chaque ias
+nb_nat_assoc <- lapply(gps_inter, function(x) {
+  x %>% distinct(ias_simple, count_inter_ias)
+})
+nb_ias_assoc <- lapply(gps_inter, function(x) {
+  x %>% distinct(binomial_iucn, count_inter_native)
+})
+
+View(nb_ias_assoc$Amphibia)
+table(nb_ias_assoc$Amphibia$count_inter_native)
+View(nb_ias_assoc$Aves)
+table(nb_ias_assoc$Aves$count_inter_native)
+View(nb_ias_assoc$Mammalia)
+table(nb_ias_assoc$Mammalia$count_inter_native)
+View(nb_ias_assoc$Reptilia)
+table(nb_ias_assoc$Reptilia$count_inter_native)
+
+
+View(nb_nat_assoc$Amphibia)
+table(nb_nat_assoc$Amphibia$count_inter_ias)
+View(nb_nat_assoc$Aves)
+table(nb_nat_assoc$Aves$count_inter_ias)
+View(nb_nat_assoc$Mammalia)
+table(nb_nat_assoc$Mammalia$count_inter_ias)
+View(nb_nat_assoc$Reptilia)
+table(nb_nat_assoc$Reptilia$count_inter_ias)
+
+############## Use bipartite package ################
+
+#bipartite
+library(bipartite)
+
+adj.matrix <- lapply(mat_net_list_signif, as.matrix)
+lapply(adj.matrix, sum) # number of interactions
 
 # test with mam only 
 
@@ -617,7 +774,6 @@ pnat <- ggplot(data = gps_mam_inter, aes(x = module_ias, y = module_native,
 library(ggpubr)
 
 ggarrange(pias, pnat)
-
 
 
 ############## Use blockmodels as in O'connor et al 2020 ################
