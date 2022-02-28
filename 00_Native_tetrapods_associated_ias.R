@@ -392,6 +392,8 @@ ias_x_native <- left_join(
     ias_simple = if_else(grepl("rattus", ias_lower), "rattus spp", ias_lower),
     ias_simple = if_else(grepl("herpest", ias_lower), "herpestidae", ias_simple))
 
+saveRDS(ias_x_native, "Output/00_IAS_x_native_species")
+
 length(unique(ias_x_native$binomial_iucn))
 hist(table(ias_x_native$ias))
 
@@ -531,6 +533,10 @@ for (i in names(mat_net_list_signif)){
       which(grepl(gps_class[[i]]$ias_simple[j], modules_list[[i]][[2]]))
   }
 }
+
+# compute network indices for each class
+# indices <- lapply(adj.matrix, networklevel) # takes 10 min
+
 
 # see if groups are reciprocal 
 p_class <- lapply(gps_class, function(x){
