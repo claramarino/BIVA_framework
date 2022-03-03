@@ -52,10 +52,65 @@ table(ias_class$Specificity)
 table(ias_class$Specificity[ias_class$Total_inter == 1])
 
 length( ias_class$Total_inter[ias_class$Total_inter > 1] )
+sum( ias_class$Total_inter[ias_class$Total_inter > 1] )
 
 ias_class %>%
   group_by(Specificity) %>%
   summarise(nb_inter = sum(Total_inter))
+
+names_2_or_more <- as.character(ias_class$ias_name[ias_class$Total_inter > 1])
+# Find synonyms using rredlist and APi key to have all synonyms from IUCN 
+# some species might be duplicated because of their synonyms
+# ex sus domesticus = sus scrofa ?
+
+# syno_ias <- data.frame()
+# for (i in 1:length(names_2_or_more)){
+#   obj <- rl_synonyms(names_2_or_more[i],
+#                      key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+#   syno_ias <- bind_rows(syno_ias, obj$result)
+#   saveRDS(syno_ias,"Output/Synonyms/01_synonyms_ias_2_or_more")
+# }
+
+syno_ias <- readRDS("Output/Synonyms/01_synonyms_ias_2_or_more")
+
+native_class <- ias_x_native_spe %>%
+  filter(ias_lower %in% names_2_or_more) %>%
+  distinct(binomial_iucn, Class, category, insular_endemic) %>%
+  mutate(threatened = if_else(category %in% c("CR", "EN", "VU"),
+                              "IAS-T","IAS-NT"))
+
+table(native_class$Class)
+
+table(native_class$threatened)
+table(native_class$Class, native_class$threatened)
+
+
+table(native_class$insular_endemic)
+table(native_class$Class, native_class$insular_endemic)
+
+table(native_class$threatened, native_class$insular_endemic)
+
+
+native_name <- unique(native_class$binomial_iucn)
+
+# chaeck for gbif data
+library(rgbif)
+df_count <- data.frame(ias_name = character(162), nb_occ = numeric(162))
+for (i in 1:length(names_2_or_more)){
+  df_count$ias_name[i] <- names_2_or_more[i]
+  df_count$nb_occ[i] <- occ_search(scientificName = names_2_or_more[i])$meta$count
+  print(i)
+}
+
+hist(log(df_count$nb_occ + 1), breaks = 20)
+
+wrong_names <- df_count$ias_name[df_count$nb_occ==0]
+correct_names <- c("senegalia catechu", "apis mellifera subsp. scutellata",
+                   "Canis lupus subsp. dingo", "cervus elaphus", 
+                   "Gallus gallus f. domesticus", "herpestes javanicus",
+                   "mustela nivalis", "rhinella marina")
+names(correct_names) <- wrong_names
+correct_names
 
 
 # sp IAS that threatened 2-3 classes
@@ -83,3 +138,25 @@ table(ias_class_severe$Specificity)
 table(ias_class_severe$Specificity[ias_class_severe$Total_inter == 1])
 
 length( ias_class_severe$Total_inter[ias_class_severe$Total_inter > 1] )
+sum( ias_class_severe$Total_inter[ias_class_severe$Total_inter > 1] )
+
+names_2_or_more_signif <- 
+  ias_class_severe$ias_name[ias_class_severe$Total_inter > 1]
+native_class_signif <- ias_x_native_spe_signif %>%
+  filter(ias_lower %in% names_2_or_more_signif) %>%
+  distinct(binomial_iucn, Class, category, insular_endemic) %>%
+  mutate(threatened = if_else(category %in% c("CR", "EN", "VU"),
+                              "IAS-T","IAS-NT"))
+
+table(native_class_signif$Class)
+
+table(native_class_signif$threatened)
+table(native_class_signif$Class, native_class_signif$threatened)
+
+
+table(native_class_signif$insular_endemic)
+table(native_class_signif$Class, native_class_signif$insular_endemic)
+
+table(native_class_signif$threatened, native_class_signif$insular_endemic)
+
+native_name <- unique(native_class_signif$binomial_iucn)
