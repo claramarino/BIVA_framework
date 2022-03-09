@@ -140,8 +140,9 @@ table(ias_class_severe$Specificity[ias_class_severe$Total_inter == 1])
 length( ias_class_severe$Total_inter[ias_class_severe$Total_inter > 1] )
 sum( ias_class_severe$Total_inter[ias_class_severe$Total_inter > 1] )
 
-names_2_or_more_signif <- 
-  ias_class_severe$ias_name[ias_class_severe$Total_inter > 1]
+names_2_or_more_signif <- unique(as.character(
+  ias_class_severe$ias_name[ias_class_severe$Total_inter > 1]))
+  
 native_class_signif <- ias_x_native_spe_signif %>%
   filter(ias_lower %in% names_2_or_more_signif) %>%
   distinct(binomial_iucn, Class, category, insular_endemic) %>%
@@ -160,3 +161,47 @@ table(native_class_signif$Class, native_class_signif$insular_endemic)
 table(native_class_signif$threatened, native_class_signif$insular_endemic)
 
 native_name <- unique(native_class_signif$binomial_iucn)
+
+# save native species list to define groups of IAS-A
+
+# all interaction with a named IAS 
+native_name_all <- unique(ias_x_native_spe %>% pull(binomial_iucn))
+# Native sp associated with an IAS that interact with 2 natives or more
+native_name_2more <- unique(ias_x_native_spe %>% 
+                              filter(ias_lower %in% names_2_or_more) %>%
+                              pull(binomial_iucn))
+# Native sp that have a severe interaction with an IAS
+native_name_severe <- unique(ias_x_native_spe_signif %>% pull(binomial_iucn))
+# NAtive sp that have a severe interaction with an IAS that interact with 2 natives or more
+native_name_severe_2more <- unique(ias_x_native_spe_signif %>%
+                                     filter(ias_lower %in% names_2_or_more_signif) %>%
+                                     pull(binomial_iucn))
+
+list_native_names <- list(
+  all = native_name_all,
+  all2more = native_name_2more,
+  severe = native_name_severe,
+  severe2more = native_name_severe_2more
+)
+
+saveRDS(list_native_names, "Output/Data_clean/01_native_names_to_model")
+
+#### Test open Hof file
+
+# install.packages('ncdf4')
+library(raster)
+library(ncdf4)
+r1 <- raster("Data/bioscen1.5-sdm-gam_gfdl-esm2m_ewembi_historical_nosoc_co2_thrmammalsumprob_global_30year-mean_1990_1990.nc")
+r2 <- raster("Data/bioscen1.5-sdm-gam_gfdl-esm2m_ewembi_rcp26_nosoc_co2_thrmammalsumprob_global_30year-mean_2009_2080.nc")
+r3 
+plot(r2)
+str(r2)
+r2@data
+
+i = "Data/bioscen1.5-sdm-gam_gfdl-esm2m_ewembi_historical_nosoc_co2_thrmammalsumprob_global_30year-mean_1990_1990.nc"
+nc <- nc_open(i)
+v <- nc$var[[nc$nvars]]
+test <- stack(i, varname=v$name)
+test2 = stack(i, varname = "Acanthixalus_spinosus")
+print(nlayers(test))
+plot(test[[sample(1:nlayers(test),1)]])
