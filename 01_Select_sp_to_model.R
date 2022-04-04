@@ -84,14 +84,107 @@ table(native_class$Class)
 table(native_class$threatened)
 table(native_class$Class, native_class$threatened)
 
-
 table(native_class$insular_endemic)
 table(native_class$Class, native_class$insular_endemic)
 
 table(native_class$threatened, native_class$insular_endemic)
 
-
 native_name <- unique(native_class$binomial_iucn)
+
+
+pbm_name <- names_2_or_more[grep("_old", names_2_or_more)]
+pbm_name
+
+names_2_or_more_clean <- gsub("_old", "", names_2_or_more)
+names_2_or_more_clean <- gsub("_new", "", names_2_or_more_clean)
+
+names_2_or_more_clean <- unique(names_2_or_more_clean)
+
+syno_ias <- syno_ias %>% 
+  distinct(accepted_name, synonym) %>%
+  mutate_all(tolower)
+  
+# Retrieve IUCN taxonomic information for the 159 species
+
+# iucn_search_ias <- data.frame()
+# for (i in 1:length(names_2_or_more_clean)){
+#   obj <- rl_search(names_2_or_more_clean[i],
+#                      key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+#   if(is.null(obj$result)){
+#     acc_name = syno_ias$accepted_name[syno_ias$synonym==names_2_or_more_clean[i]]
+#     obj_acc <- data.frame()
+#     for (j in length(acc_name)){
+#       obj2 <- rl_search(acc_name[j],
+#                        key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+#       obj2$result$ias_name = names_2_or_more_clean[i]
+#       obj_acc <- bind_rows(obj_acc, obj2$result)
+#     }
+#     iucn_search_ias <- bind_rows(iucn_search_ias, obj_acc)
+#   } else {
+#     obj$result$ias_name = names_2_or_more_clean[i]
+#     iucn_search_ias <- bind_rows(iucn_search_ias, obj$result)
+#   }
+#   saveRDS(iucn_search_ias,"Output/01_rl_search_ias_2_or_more")
+# }
+
+iucn_search_ias <- readRDS("Output/01_rl_search_ias_2_or_more")
+
+# some species are not in the RedList
+sum(is.na(iucn_search_ias$taxonid)) # 68
+not_rl <- iucn_search_ias$ias_name[is.na(iucn_search_ias$taxonid)]
+
+# species in the RedList
+sum(table(iucn_search_ias$class)) # 94
+# in which class?
+table(iucn_search_ias$class)
+
+
+# Are some of the 159 sp in the 100 worst alien species?
+
+# load list of 100 worst from wikipedia
+worst100 <- read.csv2("Data/100_worst_alien_species_wikipedia.csv")%>%
+  mutate_all(tolower) %>%
+  # correct bufo marinus
+  mutate(Species = if_else(Species=="bufo marinus = rhinella marina", 
+                           "rhinella marina", Species))
+
+# for each sp of our 159, tag those in worst100
+iucn_search_ias$worst100 <- "No"
+iucn_search_ias$type <- "none"
+for (i in 1:nrow(iucn_search_ias)){
+  for (j in 1:nrow(worst100)) {
+    if (iucn_search_ias$ias_name[i] == worst100$Species[j]){
+      iucn_search_ias$worst100[i] <- "Yes"
+      iucn_search_ias$type[i] <- worst100$Type[j]
+      }
+  }
+}
+
+table(iucn_search_ias$worst100) # 44 sp in worst 100
+table(iucn_search_ias$type) # 13 mammals, 7 insects, & other types 
+
+table(iucn_search_ias %>% 
+        filter(is.na(taxonid)) %>%
+        pull(worst100)) # 22 from the worst are not in RedList
+
+table(iucn_search_ias %>% 
+        filter(is.na(taxonid)) %>%
+        pull(type)) # mostly insects
+
+
+
+
+
+library(rgbif)
+
+name_usage(name = names_2_or_more[1])
+
+
+library(taxize)
+taxize::classification(names_2_or_more[1], db = 'itis')
+
+
+ritis::search_scientific("Quercus douglasii")
 
 # chaeck for gbif data
 library(rgbif)
@@ -111,6 +204,7 @@ correct_names <- c("senegalia catechu", "apis mellifera subsp. scutellata",
                    "mustela nivalis", "rhinella marina")
 names(correct_names) <- wrong_names
 correct_names
+
 
 
 # sp IAS that threatened 2-3 classes
