@@ -139,7 +139,7 @@ sum(table(iucn_search_ias$class)) # 94
 table(iucn_search_ias$class)
 
 
-# Are some of the 159 sp in the 100 worst alien species?
+#-------------- Are some of the 159 sp in the 100 worst alien species?
 
 # load list of 100 worst from wikipedia
 worst100 <- read.csv2("Data/100_worst_alien_species_wikipedia.csv")%>%
@@ -172,39 +172,98 @@ table(iucn_search_ias %>%
         pull(type)) # mostly insects
 
 
+#-------------- Are some of the 159 in Nguyen & Leung 2022 ?
+
+sdm647 <- read.csv2("Data/sdm_ias_647_N&L2020.csv")
+sdm647$species_lower <- tolower(sdm647$Species)
+
+sp_in_sdm <- names_2_or_more_clean[names_2_or_more_clean %in% sdm647$species_lower]
+sp_not_in_sdm <- names_2_or_more_clean[!(names_2_or_more_clean %in% sdm647$species_lower)]
 
 
+# for each sp of our 159, tag those in sdm647
+iucn_search_ias$sdm647 <- "No"
+iucn_search_ias$taxa <- "na"
+for (i in 1:nrow(iucn_search_ias)){
+  for (j in 1:nrow(sdm647)) {
+    if (iucn_search_ias$ias_name[i] == sdm647$species_lower[j]){
+      iucn_search_ias$sdm647[i] <- "Yes"
+      iucn_search_ias$taxa[i] <- sdm647$Taxa[j]
+    }
+  }
+}
 
-library(rgbif)
+table(iucn_search_ias$sdm647)
+table(iucn_search_ias$sdm647, iucn_search_ias$worst100)
 
-name_usage(name = names_2_or_more[1])
+# ---------------- Find taxonomy of all 159 species
 
+# taxo_name_ias <- data.frame()
+# for (i in names_2_or_more_clean){
+#   taxo_name_ias <- bind_rows(
+#     taxo_name_ias,
+#     taxize::tax_name(i, get = c('kingdom','class','order',"family"), 
+#                      db='ncbi'))
+# }
+# 
+# saveRDS(taxo_name_ias,"Output/01_name_ias_2_or_more_taxo_ncbi")
 
-library(taxize)
-taxize::classification(names_2_or_more[1], db = 'itis')
+taxo_name_ias <- readRDS("Output/01_name_ias_2_or_more_taxo_ncbi")
 
+#taxize::rank_ref
 
-ritis::search_scientific("Quercus douglasii")
+hist(table(taxo_name_ias$class))
+
+agg_class <- taxo_name_ias %>% 
+  group_by(class) %>%
+  summarise(count=n())
+
+ggplot(agg_class, aes(x = reorder(class, count), y = count)) +
+  geom_bar(stat = 'identity') + xlab("")+
+  theme_classic() + coord_flip()
+
+# agg_order <- taxo_name_ias %>% 
+#   group_by(order) %>%
+#   summarise(count=n())
+# ggplot(agg_order, aes(x = reorder(order, count), y = count)) +
+#   geom_bar(stat = 'identity') + xlab("")+
+#   theme_classic() + coord_flip()
+# 
+# 
+
+write.table(taxo_name_ias, "Output/01_159_IAS_interact_2_or_more_tetrap.txt")
+
 
 # chaeck for gbif data
 library(rgbif)
-df_count <- data.frame(ias_name = character(162), nb_occ = numeric(162))
-for (i in 1:length(names_2_or_more)){
-  df_count$ias_name[i] <- names_2_or_more[i]
-  df_count$nb_occ[i] <- occ_search(scientificName = names_2_or_more[i])$meta$count
+df_count <- taxo_name_ias %>% 
+  mutate(nb_occ = numeric(nrow(taxo_name_ias)))
+for (i in 1:nrow(df_count)){
+  df_count$nb_occ[i] <- occ_search(scientificName = df_count$query[i])$meta$count
   print(i)
 }
 
 hist(log(df_count$nb_occ + 1), breaks = 20)
 
-wrong_names <- df_count$ias_name[df_count$nb_occ==0]
-correct_names <- c("senegalia catechu", "apis mellifera subsp. scutellata",
-                   "Canis lupus subsp. dingo", "cervus elaphus", 
-                   "Gallus gallus f. domesticus", "herpestes javanicus",
-                   "mustela nivalis", "rhinella marina")
-names(correct_names) <- wrong_names
+wrong_names <- df_count$query[df_count$nb_occ==0]
+
+
+correct_names <- c("acacia catechu"="senegalia catechu", 
+                   "apis mellifera ssp. scutellata" = "Apis mellifera subsp. scutellata",
+                   "canis lupus ssp. dingo" ="Canis lupus subsp. dingo", 
+                   "gallus gallus ssp. domesticus" = "Gallus gallus f. domesticus")
 correct_names
 
+for (i in 1:nrow(df_count)){
+  for (j in 1:length(correct_names)){
+    if (df_count$query[i] == names(correct_names)[j]){
+      df_count$nb_occ[i] <- occ_search(scientificName = correct_names[j])$meta$count
+      print(correct_names[j])
+    }
+  }
+}
+
+hist(log(df_count$nb_occ + 1), breaks = 20)
 
 
 # sp IAS that threatened 2-3 classes
