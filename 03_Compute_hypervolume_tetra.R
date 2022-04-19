@@ -125,6 +125,7 @@ assembl_threat_list <- lapply(assoc_threat_list, function(x){
 })
 
 
+
 # build hypervolume
 # from BAT package (Soares)
 
@@ -298,8 +299,6 @@ for (i in sp_ias_as){
 
 
 
-
-
 # test sur la matrice de distances entre les sp
 matrix_list <- lapply(dis.gower_list, as.matrix)
 lapply(matrix_list, dim)
@@ -308,5 +307,18 @@ hist(matrix_list$Bird, breaks = 100)
 hist(matrix_list$Mam, breaks = 100)
 hist(matrix_list$Rept, breaks = 100)
 
+# Test functions from mFD
 
+library(mFD)
 
+fric <- alpha.fd.multidim(
+  sp_faxes_coord = as.matrix(mat_coord_best$Bird[pull(assoc_threat_list$Bird, binomial),]),
+  asb_sp_w = assembl_threat_list$Bird,
+  ind_vect = "fric")
+
+plots_alpha <- alpha.multidim.plot(
+  output_alpha_fd_multidim = fric,
+  ind_nm = "fric",
+  plot_asb_nm = "Assoc_ias_2more")
+
+plots_alpha$"fric"$"patchwork"
