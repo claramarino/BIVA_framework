@@ -6,6 +6,7 @@ library(tidyverse)
 library(BAT)
 library(alphahull)
 library(ape)
+library(hypervolume)
 # # Automatically install required packages, which are not yet in library
 # packages <- c("tidyverse","BAT")
 # new.packages <- packages[!(packages %in% installed.packages()[,"Package"])]
@@ -60,8 +61,9 @@ data_ft_list <- lapply(data_ft_list, function(x){
 # Build functional space axis with pcoa 
 # Same method as in mechabirds
 # distance matrix based on traits 
-
-dis.gower_list <- lapply(data_ft_list, cluster::daisy)
+# 
+# dis.gower_list <- lapply(data_ft_list, cluster::daisy)
+# saveRDS(dis.gower_list, "Output/03_distance_matrix_bmr")
 # pcoa_list <- lapply(dis.gower_list, ape::pcoa) # very long (30 min +)
 # # save in RDS
 # saveRDS(pcoa_list, "Output/03_pcoa_coordinates_all_tetrapods")
@@ -105,6 +107,7 @@ df_all_threat_conserv <- df_all_threat %>%
          Assoc_ias_2more = ifelse(binomial %in% natives_to_include$all2more,1, 0),
          Assoc_ias_severe = ifelse(binomial %in% natives_to_include$severe,1, 0),
          Assoc_ias_severe2more = ifelse(binomial %in% natives_to_include$severe2more,1, 0))
+#saveRDS(df_all_threat_conserv, "Output/Data_clean/03_df_all_threat_assoc_bmr")
 
 
 assoc_threat_list <- list(
@@ -112,6 +115,7 @@ assoc_threat_list <- list(
   Mam = df_all_threat_conserv %>% filter(binomial %in% rownames(data_ft_list$Mam)), 
   Rept = df_all_threat_conserv %>% filter(binomial %in% rownames(data_ft_list$Rept)))
 
+#saveRDS(assoc_threat_list, "Output/Data_clean/03_df_all_threat_assoc_bmr_with_traits")
 
 assembl_threat_list <- lapply(assoc_threat_list, function(x){
   rownames(x) = x$binomial
@@ -124,6 +128,225 @@ assembl_threat_list <- lapply(assoc_threat_list, function(x){
   return(transposed)
 })
 
+
+# Objectif de la méthode :
+# créer un hypervolume avec toutes les espèces IAS-associated (2 more)
+# sélectionner les zones coeurs de l'hv (hotspots)
+# évaluer quels points des espèces non associées tombent dans les zones coeur de l'hv
+# répéter la procédure pour plusieurs hv (100) car probalistic doinc variable
+# ne garder que les espèces qui tombent à chaque fois dans la zone coeur
+
+#####################################################################
+#              Evaluation of the method
+#####################################################################
+
+# Pour évaluer la méthode :
+# tester si les IAS-associated tombent à chaque fois dans l'hv
+# Pour chaque IAS-as, construire un hv sans elle (mais avec tout le reste du groupe)
+# évaluer si le point tombe dans l'hv
+
+
+pred_in_core <- vector(mode = "list", length = 3)
+names(pred_in_core) <- names(assembl_threat_list)
+
+# very long : from 5hours for mammals to 15h for half of birds
+# do it in parallel for each group and separate birds in two
+
+# for (i in 1:3){
+#   print(names(assembl_threat_list)[i])
+#   
+#   # select assemblage of class i
+#   assembl <- assembl_threat_list[[i]]
+#   # select coordinates of all species that are in assemblage of class i
+#   mat_coord_ok <- mat_coord_best[[i]][
+#     pull(assoc_threat_list[[i]], binomial),]
+#   
+#   # set up species list 
+#   sp_list <- pull(assoc_threat_list[[i]] %>% filter(Assoc_ias_2more == 1), 
+#                   binomial)
+#   
+#   #### For birds separate in two list for parallelizing
+#   # sp_list_b1 <- sp_list[1:(length(sp_list)/2)]
+#   # sp_list_b2 <- sp_list[((length(sp_list)/2)+1):length(sp_list)]
+#   
+#   pred_in_core[[i]] <- data.frame(
+#     binomial = sp_list,
+#     is_in_core_0.01 = character(length(sp_list)),
+#     is_in_core_0.05 = character(length(sp_list)))
+#   
+#   for (sp in sp_list){
+#     print(paste0(which(sp_list == sp), "/", length(sp_list)))
+#     
+#     group_no_sp <- assembl["Assoc_ias_2more", ]
+#     group_no_sp[sp] <- 0
+#     
+#     hv_without_sp <- kernel.build(group_no_sp, 
+#                                   mat_coord_ok)
+#     
+#     point_to_test <- mat_coord_ok[sp,] 
+#   
+#     # for p = 0.01
+#     hotspot_0.01 <- kernel.hotspots(hv_without_sp, prop = 0.01)
+#     points_in_hotspot_0.01 <- hypervolume_inclusion_test(
+#       hotspot_0.01, point_to_test, fast.or.accurate = "accurate")
+# 
+#     # for p = 0.05
+#     hotspot_0.05 <- kernel.hotspots(hv_without_sp, prop = 0.05)
+#     points_in_hotspot_0.05 <- hypervolume_inclusion_test(
+#       hotspot_0.05, point_to_test, fast.or.accurate = "accurate")
+#     
+#     # store results
+#     
+#     pred_in_core[[i]]$is_in_core_0.01[pred_in_core[[i]]$binomial==sp] <- 
+#       as.character(points_in_hotspot_0.01)
+#     pred_in_core[[i]]$is_in_core_0.05[pred_in_core[[i]]$binomial==sp] <- 
+#       as.character(points_in_hotspot_0.05)
+#     
+#   }
+#   
+#   
+# }
+# 
+# saveRDS(pred_in_core$Mam, "Output/hv/03_ias_as_sp_in_core_mam")
+# saveRDS(pred_in_core$Rept, "Output/hv/03_ias_as_sp_in_core_rept")
+# saveRDS(pred_in_core$Bird, "Output/hv/03_ias_as_sp_in_core_bird_b1")
+# saveRDS(pred_in_core$Bird, "Output/hv/03_ias_as_sp_in_core_bird_b2")
+# 
+
+#-------------------- Read files
+
+pred_in_core <- list(
+  Bird = bind_rows(
+    readRDS("Output/hv/03_ias_as_sp_in_core_bird_b1"),
+    readRDS("Output/hv/03_ias_as_sp_in_core_bird_b2")),
+  Mam = readRDS("Output/hv/03_ias_as_sp_in_core_mam"),
+  Rept = readRDS("Output/hv/03_ias_as_sp_in_core_rept")
+)
+
+lapply(pred_in_core, function(x){
+  sum(x$is_in_core_0.01 == "TRUE")
+  sum(x$is_in_core_0.05 == "TRUE")
+})
+
+
+
+
+
+
+
+#####################################################################
+#              Find species in ias hv core
+#####################################################################
+
+#test sur 100 hv 
+
+#------------- For mammals --------------
+
+sp_in_hotspot_as_0.05 <- vector(mode = "list", length = 100)
+sp_in_hotspot_as_0.01 <- vector(mode = "list", length = 100)
+
+for (i in 1:100){
+  #compute hv
+  hv_ias_as_mam <- kernel.build(assembl_threat_list$Mam["Assoc_ias_2more",], 
+                                mat_coord_best$Mam)
+  # for p = 0.01
+  hotspot_ias_as_0.01 <- kernel.hotspots(hv_ias_as_mam, prop = 0.01)
+  points_in_hotspot_0.01 <- hypervolume_inclusion_test(
+    hotspot_ias_as_0.01, points_to_test_as,fast.or.accurate = "accurate")
+    sp_in_hotspot_as_0.01[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.01,])
+  
+  # for p = 0.05
+  hotspot_ias_as_0.05 <- kernel.hotspots(hv_ias_as_mam, prop = 0.05)
+  points_in_hotspot_0.05 <- hypervolume_inclusion_test(
+    hotspot_ias_as_0.05, points_to_test_as,fast.or.accurate = "accurate")
+  sp_in_hotspot_as_0.05[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.05,])
+  
+  saveRDS(sp_in_hotspot_as_0.01, "Output/hv/03_sp_in_hotspot_a2_0.01_mam")
+  saveRDS(sp_in_hotspot_as_0.05, "Output/hv/03_sp_in_hotspot_a2_0.05_mam")
+  
+  print(i)
+}
+
+
+
+
+
+#--------------- for birds --------------
+
+# test sur 100 hv 
+
+sp_in_hotspot_as_0.05 <- vector(mode = "list", length = 100)
+sp_in_hotspot_as_0.01 <- vector(mode = "list", length = 100)
+# select sp that are not IAS-AS
+non_ias_as_bird <- pull(assoc_threat_list$Bird %>% filter(Assoc_ias_severe != 1), 
+                        binomial)
+points_to_test_as <- mat_coord_best$Bird[non_ias_as_bird,] 
+
+
+for (i in 1:100){
+  #compute hv
+  hv_ias_as_bird <- kernel.build(assembl_threat_list$Bird["Assoc_ias_severe",], 
+                                 mat_coord_best$Bird[
+                                   pull(assoc_threat_list$Bird, binomial),])
+  # for p = 0.01
+  hotspot_ias_as_0.01 <- kernel.hotspots(hv_ias_as_bird, prop = 0.01)
+  points_in_hotspot_0.01 <- hypervolume_inclusion_test(
+    hotspot_ias_as_0.01, points_to_test_as,fast.or.accurate = "accurate")
+  sp_in_hotspot_as_0.01[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.01,])
+  
+  # for p = 0.05
+  hotspot_ias_as_0.05 <- kernel.hotspots(hv_ias_as_bird, prop = 0.05)
+  points_in_hotspot_0.05 <- hypervolume_inclusion_test(
+    hotspot_ias_as_0.05, points_to_test_as,fast.or.accurate = "accurate")
+  sp_in_hotspot_as_0.05[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.05,])
+  
+  print(i)
+  
+  saveRDS(sp_in_hotspot_as_0.01, "Output/hv/03_sp_in_hotspot_as_0.01_bird")
+  saveRDS(sp_in_hotspot_as_0.05, "Output/hv/03_sp_in_hotspot_as_0.05_bird")
+}
+
+#--------------- for reptiles --------------
+
+# test sur 100 hv 
+
+sp_in_hotspot_as_0.05 <- vector(mode = "list", length = 100)
+sp_in_hotspot_as_0.01 <- vector(mode = "list", length = 100)
+# select sp that are not IAS-AS
+non_ias_as_rept <- pull(assoc_threat_list$Rept %>% filter(Assoc_ias_severe != 1), 
+                        binomial)
+points_to_test_as <- mat_coord_best$Rept[non_ias_as_rept,] 
+
+
+for (i in 1:100){
+  #compute hv
+  hv_ias_as_rept <- kernel.build(assembl_threat_list$Rept["Assoc_ias_severe",], 
+                                 mat_coord_best$Rept)
+  # for p = 0.01
+  hotspot_ias_as_0.01 <- kernel.hotspots(hv_ias_as_rept, prop = 0.01)
+  points_in_hotspot_0.01 <- hypervolume_inclusion_test(
+    hotspot_ias_as_0.01, points_to_test_as,fast.or.accurate = "accurate")
+  sp_in_hotspot_as_0.01[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.01,])
+  
+  # for p = 0.05
+  hotspot_ias_as_0.05 <- kernel.hotspots(hv_ias_as_rept, prop = 0.05)
+  points_in_hotspot_0.05 <- hypervolume_inclusion_test(
+    hotspot_ias_as_0.05, points_to_test_as,fast.or.accurate = "accurate")
+  sp_in_hotspot_as_0.05[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.05,])
+  
+  saveRDS(sp_in_hotspot_as_0.01, "Output/hv/03_sp_in_hotspot_as_0.01_rept")
+  saveRDS(sp_in_hotspot_as_0.05, "Output/hv/03_sp_in_hotspot_as_0.05_rept")
+  
+  print(i)
+}
+
+
+
+
+
+#############################################################
+#                         TESTS
+#############################################################
 
 
 # build hypervolume
@@ -168,7 +391,7 @@ kernel.alpha(intersect_iast_no_iast_mam)
 
 hotspot_ias_t <- kernel.hotspots(hv_ias_t_mam, prop = 0.05)
 points_in_hotspot <- hypervolume_inclusion_test(hotspot_ias_t, points_to_test,
-                                           fast.or.accurate = "accurate")
+                                                fast.or.accurate = "accurate")
 sum(points_in_hotspot)
 
 data_intersect <- intersect_iast_no_iast_mam@HVList$Intersection@Data
@@ -176,136 +399,8 @@ data_intersect <- intersect_iast_no_iast_mam@HVList$Intersection@Data
 
 hotspot_ias_as <- kernel.hotspots(hv_ias_as_mam, prop = 0.01)
 points_in_hotspot_as <- hypervolume_inclusion_test(hotspot_ias_as, points_to_test_as,
-                                                fast.or.accurate = "accurate")
+                                                   fast.or.accurate = "accurate")
 sum(points_in_hotspot_as)
-
-
-# test sur 100 hv 
-
-sp_in_hotspot_as_0.05 <- vector(mode = "list", length = 100)
-sp_in_hotspot_as_0.01 <- vector(mode = "list", length = 100)
-
-for (i in 1:100){
-  #compute hv
-  hv_ias_as_mam <- kernel.build(assembl_threat_list$Mam["Assoc_ias_severe",], 
-                                mat_coord_best$Mam)
-  # for p = 0.01
-  hotspot_ias_as_0.01 <- kernel.hotspots(hv_ias_as_mam, prop = 0.01)
-  points_in_hotspot_0.01 <- hypervolume_inclusion_test(
-    hotspot_ias_as_0.01, points_to_test_as,fast.or.accurate = "accurate")
-    sp_in_hotspot_as_0.01[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.01,])
-  
-  # for p = 0.05
-  hotspot_ias_as_0.05 <- kernel.hotspots(hv_ias_as_mam, prop = 0.05)
-  points_in_hotspot_0.05 <- hypervolume_inclusion_test(
-    hotspot_ias_as_0.05, points_to_test_as,fast.or.accurate = "accurate")
-  sp_in_hotspot_as_0.05[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.05,])
-  
-  saveRDS(sp_in_hotspot_as_0.01, "Output/hv/03_sp_in_hotspot_as_0.01_mam")
-  saveRDS(sp_in_hotspot_as_0.05, "Output/hv/03_sp_in_hotspot_as_0.05_mam")
-  
-  print(i)
-}
-
-
-
-
-
-#--------------- for birds --------------
-
-# test sur 100 hv 
-
-sp_in_hotspot_as_0.05 <- vector(mode = "list", length = 100)
-sp_in_hotspot_as_0.01 <- vector(mode = "list", length = 100)
-# select sp that are not IAS-AS
-non_ias_as_bird <- pull(assoc_threat_list$Bird %>% filter(Assoc_ias_severe != 1), 
-                        binomial)
-points_to_test_as <- mat_coord_best$Bird[non_ias_as_bird,] 
-
-library(hypervolume)
-for (i in 1:100){
-  #compute hv
-  hv_ias_as_bird <- kernel.build(assembl_threat_list$Bird["Assoc_ias_severe",], 
-                                 mat_coord_best$Bird[
-                                   pull(assoc_threat_list$Bird, binomial),])
-  # for p = 0.01
-  hotspot_ias_as_0.01 <- kernel.hotspots(hv_ias_as_bird, prop = 0.01)
-  points_in_hotspot_0.01 <- hypervolume_inclusion_test(
-    hotspot_ias_as_0.01, points_to_test_as,fast.or.accurate = "accurate")
-  sp_in_hotspot_as_0.01[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.01,])
-  
-  # for p = 0.05
-  hotspot_ias_as_0.05 <- kernel.hotspots(hv_ias_as_bird, prop = 0.05)
-  points_in_hotspot_0.05 <- hypervolume_inclusion_test(
-    hotspot_ias_as_0.05, points_to_test_as,fast.or.accurate = "accurate")
-  sp_in_hotspot_as_0.05[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.05,])
-  
-  print(i)
-  
-  saveRDS(sp_in_hotspot_as_0.01, "Output/hv/03_sp_in_hotspot_as_0.01_bird")
-  saveRDS(sp_in_hotspot_as_0.05, "Output/hv/03_sp_in_hotspot_as_0.05_bird")
-}
-
-#--------------- for reptiles --------------
-
-# test sur 100 hv 
-
-sp_in_hotspot_as_0.05 <- vector(mode = "list", length = 100)
-sp_in_hotspot_as_0.01 <- vector(mode = "list", length = 100)
-# select sp that are not IAS-AS
-non_ias_as_rept <- pull(assoc_threat_list$Rept %>% filter(Assoc_ias_severe != 1), 
-                        binomial)
-points_to_test_as <- mat_coord_best$Rept[non_ias_as_rept,] 
-
-library(hypervolume)
-for (i in 1:100){
-  #compute hv
-  hv_ias_as_rept <- kernel.build(assembl_threat_list$Rept["Assoc_ias_severe",], 
-                                 mat_coord_best$Rept)
-  # for p = 0.01
-  hotspot_ias_as_0.01 <- kernel.hotspots(hv_ias_as_rept, prop = 0.01)
-  points_in_hotspot_0.01 <- hypervolume_inclusion_test(
-    hotspot_ias_as_0.01, points_to_test_as,fast.or.accurate = "accurate")
-  sp_in_hotspot_as_0.01[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.01,])
-  
-  # for p = 0.05
-  hotspot_ias_as_0.05 <- kernel.hotspots(hv_ias_as_rept, prop = 0.05)
-  points_in_hotspot_0.05 <- hypervolume_inclusion_test(
-    hotspot_ias_as_0.05, points_to_test_as,fast.or.accurate = "accurate")
-  sp_in_hotspot_as_0.05[[i]] <- rownames(points_to_test_as[points_in_hotspot_0.05,])
-  
-  saveRDS(sp_in_hotspot_as_0.01, "Output/hv/03_sp_in_hotspot_as_0.01_rept")
-  saveRDS(sp_in_hotspot_as_0.05, "Output/hv/03_sp_in_hotspot_as_0.05_rept")
-  
-  print(i)
-}
-
-
-
-####------------- Test method hv inclusion --------------#####
-
-# for each sp in sp IAS-AS => compute hv without it
-#  calculate hotspot, and test inclusion on the sp in th volume
-
-sp_ias_as <- pull(assoc_threat_list$Mam %>% 
-                    filter(Assoc_ias_severe==1), binomial)
-length()
-sum(assembl_threat_list$Mam["Assoc_ias_severe",])
-
-for (i in sp_ias_as){
-  hv_ias_as_mam <- kernel.build(assembl_threat_list$Mam["Assoc_ias_severe",], 
-                                mat_coord_best$Mam)
-}
-
-
-
-# test sur la matrice de distances entre les sp
-matrix_list <- lapply(dis.gower_list, as.matrix)
-lapply(matrix_list, dim)
-
-hist(matrix_list$Bird, breaks = 100)
-hist(matrix_list$Mam, breaks = 100)
-hist(matrix_list$Rept, breaks = 100)
 
 # Test functions from mFD
 

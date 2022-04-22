@@ -332,9 +332,25 @@ none <- c("Clostridium botulinum", "erysipelothrix rhusiopathiae", "sus domestic
 # erysipelothrix rhusiopathiae = bacteria
 # sus domesticus to bind with sus scrofa?
 
+data_72 <- read.delim("Data/data72R.txt")
+colnames(data_72)
+str(data_72)
 
+# select only global studies
+table(data_72$scale2)
+table(data_72$scale3)
 
+table(pull(data_72 %>%
+             filter(scale3 == "world"),
+           taxonomic_group))
 
+sp <- unique(pull(data_72 %>%
+             filter(scale3 == "world"),
+           invasive_species))
+
+df_count_all <- df_count_rl %>%
+  mutate(in_72_articles = if_else(binomial %in% tolower(sp), "Yes", "No"))
+table(df_count_all$in_72_articles)
 
 # For species in IUCN, compute actual exposure
 # all grid cells were an invasive sp occur outside of its native range (IUCN)

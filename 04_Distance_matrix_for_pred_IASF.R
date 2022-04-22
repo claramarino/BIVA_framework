@@ -11,68 +11,27 @@ library(cluster)
 library(tibble)
 library(ggplot2)
 
-# Load trait data
-data_ft_mam <- readRDS("Output/Data_clean/02_ft_all_native_mammals")
-data_ft_rept <- readRDS("Output/Data_clean/02_ft_all_native_reptiles")
-data_ft_bird <- readRDS("Output/Data_clean/02_ft_all_native_birds")
-# load threat data (global pool)
-df_all_threat <- readRDS("Output/Data_clean/02_threats_all_native_tetrapods")
-# load severe native (conservative pool)
-natives_to_include <- readRDS("Output/Data_clean/01_native_names_to_model")
+# Load distance matrix
 
-df_all_threat_conserv <- df_all_threat %>%
-  filter(Class!="Amphibia") %>%
-  mutate(Assoc_ias = ifelse(binomial %in% natives_to_include$all,1, 0),
-         Assoc_ias_2more = ifelse(binomial %in% natives_to_include$all2more,1, 0),
-         Assoc_ias_severe = ifelse(binomial %in% natives_to_include$severe,1, 0),
-         Assoc_ias_severe2more = ifelse(binomial %in% natives_to_include$severe2more,1, 0))
+dis.gower_list <- readRDS("Output/03_distance_matrix_bmr")
 
-table(df_all_threat_conserv$Assoc_ias_severe,
-      df_all_threat_conserv$group)
-table(df_all_threat_conserv$Assoc_ias_severe2more,
-      df_all_threat_conserv$group)
-table(df_all_threat_conserv$Assoc_ias_2more,
-      df_all_threat_conserv$group)
-table(df_all_threat_conserv$group, df_all_threat_conserv$Class)
+# Load assemblages
+df_all_threat_conserv <- readRDS("Output/Data_clean/03_df_all_threat_assoc_bmr")
+assoc_threat_list <- readRDS("Output/Data_clean/03_df_all_threat_assoc_bmr_with_traits")
 
 
-# --------------- Create a list with the 3 classes -----------------
 
-data_ft_bird$binomial = rownames(data_ft_bird)
-# traits to keep for each class 
-traits_mam <- c("Habitat","ln.Mass.g", "Main.diet","Activity",
-                "For.niche", "insular_endemic")
-traits_rept <- c("Habitat","max_log10_BM_g", "Repro.mode","Activity", 
-                 "For.niche", "insular_endemic")
 
-# select good traits for each class
-data_ft_mam_ok <- data_ft_mam %>%
-  select(binomial, all_of(traits_mam))
-data_ft_rept_ok <- data_ft_rept %>%
-  select(binomial, all_of(traits_rept))
-# keep same traits as in mechabirds for birds
-
-# create list
-data_ft_list <- list(
-  Bird = data_ft_bird,
-  Mam = data_ft_mam_ok,
-  Rept = data_ft_rept_ok
-)
-
-# shape data_ft for calculating distance matrix
-data_ft_list <- lapply(data_ft_list, function(x){
-  rownames(x) <- x$binomial
-  x %>% select(-binomial) %>%
-    mutate_if(is.character, as.factor)
+assembl_threat_list <- lapply(assoc_threat_list, function(x){
+  rownames(x) = x$binomial
+  to_transpose  <- x %>% 
+    mutate(IAS_T = if_else(group=="IAS_T", 1, 0),
+           global = 1,
+           no_IAS_T = global - IAS_T) %>%
+    select(ias_8.1, IAS_T, no_IAS_T, Assoc_ias:Assoc_ias_severe2more, global)
+  transposed <- t(as.matrix(to_transpose))
+  return(transposed)
 })
-
-
-####---------------- Set up species groups ------------------####
-
-assoc_threat_list <- list(
-  Bird = df_all_threat_conserv %>% filter(Class=="Aves"), 
-  Mam = df_all_threat_conserv %>% filter(Class=="Mammalia"), 
-  Rept = df_all_threat_conserv %>% filter(Class=="Reptilia"))
 
 # ias_threatened sp (not conservative)
 ias_t_all_list <- lapply(assoc_threat_list, function(x){
@@ -84,18 +43,23 @@ ias_t_severe_list <- lapply(assoc_threat_list, function(x){
 ias_a_severe_list <- lapply(assoc_threat_list, function(x){
   x %>% filter(Assoc_ias_severe == 1)})
 
-  
-####-------------- Compute distance matrix -----------------####
+################################################################
+#              Distance matrix for predicting IAS-as
+################################################################
 
-# distance matrix based on traits 
-dis.gower_list <- lapply(data_ft_list, daisy)
+# test sur la matrice de distances entre les sp
 
+dis.gower_list <- lapply(data_ft_list, cluster::daisy)
 lapply(dis.gower_list, summary)
 # globalement, les distances entre les oiseaux sont plus faibles que dans les autres classes
 # comme dans soares, sélectionner un pool de traits qui permet de maximiser les distances ?
-
 matrix_list <- lapply(dis.gower_list, as.matrix)
 lapply(matrix_list, dim)
+
+hist(matrix_list$Bird, breaks = 100)
+hist(matrix_list$Mam, breaks = 100)
+hist(matrix_list$Rept, breaks = 100)
+
 
 # Evaluate the prediction using all IAS-T (or IAS-A) sp 
 # as a group with a known association with IAS
