@@ -106,8 +106,9 @@ df_all_threat_conserv <- df_all_threat %>%
   mutate(Assoc_ias = ifelse(binomial %in% natives_to_include$all,1, 0),
          Assoc_ias_2more = ifelse(binomial %in% natives_to_include$all2more,1, 0),
          Assoc_ias_severe = ifelse(binomial %in% natives_to_include$severe,1, 0),
-         Assoc_ias_severe2more = ifelse(binomial %in% natives_to_include$severe2more,1, 0))
-#saveRDS(df_all_threat_conserv, "Output/Data_clean/03_df_all_threat_assoc_bmr")
+         Assoc_ias_severe2more = ifelse(binomial %in% natives_to_include$severe2more,1, 0)) %>%
+  mutate(Assoc_ias_2more_t = if_else(Assoc_ias_2more ==1 & threatened == 1, 1, 0))
+saveRDS(df_all_threat_conserv, "Output/Data_clean/03_df_all_threat_assoc_bmr")
 
 
 assoc_threat_list <- list(
@@ -115,7 +116,7 @@ assoc_threat_list <- list(
   Mam = df_all_threat_conserv %>% filter(binomial %in% rownames(data_ft_list$Mam)), 
   Rept = df_all_threat_conserv %>% filter(binomial %in% rownames(data_ft_list$Rept)))
 
-#saveRDS(assoc_threat_list, "Output/Data_clean/03_df_all_threat_assoc_bmr_with_traits")
+saveRDS(assoc_threat_list, "Output/Data_clean/03_df_all_threat_assoc_bmr_with_traits")
 
 assembl_threat_list <- lapply(assoc_threat_list, function(x){
   rownames(x) = x$binomial
@@ -123,7 +124,7 @@ assembl_threat_list <- lapply(assoc_threat_list, function(x){
     mutate(IAS_T = if_else(group=="IAS_T", 1, 0),
            global = 1,
            no_IAS_T = global - IAS_T) %>%
-    select(ias_8.1, IAS_T, no_IAS_T, Assoc_ias:Assoc_ias_severe2more, global)
+    select(ias_8.1, IAS_T, no_IAS_T, Assoc_ias:Assoc_ias_2more_t, global)
   transposed <- t(as.matrix(to_transpose))
   return(transposed)
 })
@@ -149,7 +150,7 @@ assembl_threat_list <- lapply(assoc_threat_list, function(x){
 pred_in_core <- vector(mode = "list", length = 3)
 names(pred_in_core) <- names(assembl_threat_list)
 
-# very long : from 5hours for mammals to 15h for half of birds
+# very long : from 5 hours for mammals to 15h for half of birds
 # do it in parallel for each group and separate birds in two
 
 # for (i in 1:3){
@@ -224,13 +225,85 @@ pred_in_core <- list(
 )
 
 lapply(pred_in_core, function(x){
-  sum(x$is_in_core_0.01 == "TRUE")
-  sum(x$is_in_core_0.05 == "TRUE")
+  sum(x$is_in_core_0.05 == "TRUE")/nrow(x)
 })
 
+lapply(pred_in_core, function(x){
+  sum(x$is_in_core_0.01 == "TRUE")/nrow(x)
+})
+
+# really bad prediction rates...
+
+# should we try with ias_t species only ?
+
+# number of sp associated to IAS 2more & threatened
+lapply(assoc_threat_list, function(x){
+  table(x$Assoc_ias_2more_t)
+})
+
+pred_in_core_ias_t <- vector(mode = "list", length = 3)
+names(pred_in_core_ias_t) <- names(assembl_threat_list)
+
+for (i in c(2,3,1)){
+  print(names(assembl_threat_list)[i])
+
+  # select assemblage of class i
+  assembl <- assembl_threat_list[[i]]
+  # select coordinates of all species that are in assemblage of class i
+  mat_coord_ok <- mat_coord_best[[i]][
+    pull(assoc_threat_list[[i]], binomial),]
+
+  # set up species list
+  sp_list <- pull(assoc_threat_list[[i]] %>% 
+                    filter(Assoc_ias_2more_t == 1), 
+                  binomial)
+
+  pred_in_core_ias_t[[i]] <- data.frame(
+    binomial = sp_list,
+    is_in_core_0.01 = character(length(sp_list)),
+    is_in_core_0.05 = character(length(sp_list)))
+
+  for (sp in sp_list){
+    print(paste0(which(sp_list == sp), "/", length(sp_list)))
+
+    group_no_sp <- assembl["Assoc_ias_2more_t", ]
+    group_no_sp[sp] <- 0
+
+    hv_without_sp <- kernel.build(group_no_sp,
+                                  mat_coord_ok)
+
+    point_to_test <- mat_coord_ok[sp,]
+
+    # for p = 0.01
+    hotspot_0.01 <- kernel.hotspots(hv_without_sp, prop = 0.01)
+    points_in_hotspot_0.01 <- hypervolume_inclusion_test(
+      hotspot_0.01, point_to_test, fast.or.accurate = "accurate")
+
+    # for p = 0.05
+    hotspot_0.05 <- kernel.hotspots(hv_without_sp, prop = 0.05)
+    points_in_hotspot_0.05 <- hypervolume_inclusion_test(
+      hotspot_0.05, point_to_test, fast.or.accurate = "accurate")
+
+    # store results
+
+    pred_in_core_ias_t[[i]]$is_in_core_0.01[pred_in_core_ias_t[[i]]$binomial==sp] <-
+      as.character(points_in_hotspot_0.01)
+    pred_in_core_ias_t[[i]]$is_in_core_0.05[pred_in_core_ias_t[[i]]$binomial==sp] <-
+      as.character(points_in_hotspot_0.05)
+
+  }
+  saveRDS(pred_in_core_ias_t, "Output/hv/03_ias_t_sp_in_core_bmr")
+
+}
 
 
+lapply(pred_in_core_ias_t, function(x){
+  sum(x$is_in_core_0.05 == "TRUE")/nrow(x)
+})
 
+lapply(pred_in_core_ias_t, function(x){
+  sum(x$is_in_core_0.01 == "TRUE")/nrow(x)
+})
 
 
 
