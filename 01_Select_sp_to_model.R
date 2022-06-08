@@ -7,6 +7,9 @@ library(tidyr)
 library(dplyr)
 library(rredlist)
 library(tidyverse)
+library(giscoR)
+library(rgbif)
+library(taxize)
 
 
 ias_x_native <- readRDS("Output/00_IAS_x_native_species")
@@ -59,6 +62,7 @@ ias_class %>%
   summarise(nb_inter = sum(Total_inter))
 
 names_2_or_more <- as.character(ias_class$ias_name[ias_class$Total_inter > 1])
+saveRDS(names_2_or_more, "Output/01_names_2_or_more_162")
 # Find synonyms using rredlist and APi key to have all synonyms from IUCN 
 # some species might be duplicated because of their synonyms
 # ex sus domesticus = sus scrofa ?
@@ -99,6 +103,8 @@ names_2_or_more_clean <- gsub("_old", "", names_2_or_more)
 names_2_or_more_clean <- gsub("_new", "", names_2_or_more_clean)
 
 names_2_or_more_clean <- unique(names_2_or_more_clean)
+saveRDS(names_2_or_more_clean, "Output/01_names_2_or_more_clean")
+
 
 syno_ias <- syno_ias %>% 
   distinct(accepted_name, synonym) %>%
@@ -349,8 +355,339 @@ sp <- unique(pull(data_72 %>%
            invasive_species))
 
 df_count_all <- df_count_rl %>%
-  mutate(in_72_articles = if_else(binomial %in% tolower(sp), "Yes", "No"))
-table(df_count_all$in_72_articles)
+  mutate(in_72_articles = if_else(binomial %in% tolower(sp), "Yes", "No"),
+         in_CABI = if_else(binomial %in% cabi, "Yes", "No"),
+         in_gisd = if_else(binomial %in% gisd, "Yes", "No"),
+         in_other = if_else(binomial %in% other_ref, "Yes", "No")) %>%
+  mutate(nada = if_else(redlist =="No" & worst100 == "No" & sdm647 == "No" & 
+                          in_72_articles == "No" &in_CABI == "No" & 
+                          in_gisd == "No" & in_other == "No",
+                        "nada", "ok"))
+table(df_count_all$nada)
+
+colnames(df_count_all)
+
+df_count_all %>% filter(nada=="nada") %>% pull(binomial)
+
+# vu avec Céline
+# keep only species that are terrestrial (remove freshwater fishes)
+# remove bacteria and diseases - keep parasites?
+# remove sus domesticus but change it to sus scrofa in ias_x_native
+
+df_count_terr <- df_count_rl %>%
+  # add a class for 
+  mutate(kingdom = if_else(
+    binomial %in% c("apis mellifera ssp. scutellata", "canis lupus ssp. dingo",
+                    "gallus gallus ssp. domesticus"), 
+    "Metazoa", kingdom),
+    class = if_else(binomial == "apis mellifera ssp. scutellata", "Insecta", class),
+    class = if_else(binomial == "canis lupus ssp. dingo", "Mammalia", class),
+    class = if_else(binomial == "gallus gallus ssp. domesticus","Aves", class)) %>%
+  # remove species that have no info nowhere
+  # or that are bacteria / protista / parasite
+  filter(!(is.na(kingdom))) %>%
+  # remove fishes
+  filter(class != "Actinopteri") %>%
+  filter(binomial != "sus domesticus")
+
+
+setdiff( df_count_rl$binomial, df_count_terr$binomial)
+
+agg_class <- df_count_terr %>%
+  group_by(class) %>% 
+  summarise(count= n())
+ggplot(agg_class, aes(x = reorder(class, count), y = count)) +
+  geom_bar(stat = 'identity') + xlab("")+
+  theme_classic() + coord_flip()
+
+
+# get their gbif ID
+sp_list_for_gbif_ok <- df_count_terr$binomial
+correct_names <- c("acacia catechu"="senegalia catechu", 
+                   "apis mellifera ssp. scutellata" = "Apis mellifera subsp. scutellata",
+                   "canis lupus ssp. dingo" ="Canis lupus subsp. dingo",
+                   "gallus gallus ssp. domesticus" = "Gallus gallus f. domesticus")
+sp_list_for_gbif_ok[sp_list_for_gbif_ok %in% names(correct_names)] <- 
+  correct_names
+
+df_count_terr$binomial_corr <- sp_list_for_gbif_ok
+# test <- c("senegalia catechu", "sus scrofa", "rubus niveus")
+
+
+gbif_taxon_keys_terr <-
+  df_count_terr %>%
+  #  filter(binomial_corr %in% test) %>% # use fewer names if you want to just test
+  pull(binomial_corr) %>% 
+  taxize::get_gbifid_(method="backbone") %>% # match names to the GBIF backbone to get taxonkeys
+  imap(~ .x %>% mutate(original_sciname = .y)) %>% # add original name back into data.frame
+  bind_rows() %>% # combine all data.frames into one
+  filter(status != "DOUBTFUL" & matchtype != "FUZZY")
+# choose to download all data from gbif that coul match our species names
+# then make a cleaning to keep only occurrences linked to each sp
+# %>% filter(matchtype == "EXACT" & status == "ACCEPTED") # get only accepted and matched names
+
+length(unique(gbif_taxon_keys_terr$original_sciname))
+length(unique(gbif_taxon_keys_terr$canonicalname))
+
+nrow(gbif_taxon_keys_terr %>% distinct(original_sciname, order))
+
+
+gbif_taxon_keys_terr %>%
+  distinct(canonicalname, original_sciname)
+
+gbif_taxon_keys_terr %>% 
+  distinct(original_sciname, order)
+
+gbif_taxon_keys_terr_hb <- gbif_taxon_keys_terr %>%
+  filter(!(species %in% c("Vachellia nilotica", "Podalonia hirsuta",
+                          "Cenchrus brownii", "Miconia hirta", "Dalbergia rostrata",
+                          "Mikania cynanchifolia", "Rubus pedunculosus",
+                          "Salix pentandra"
+                          ))) %>%
+  filter(!(scientificname %in% c("Bothriochloa pertusa (L.) Maire", 
+                                 "Cenchrus echinatus Cav.", 
+                                 "Gallus gallus domesticus (Linnaeus, 1758)",
+                                 "Hedychium gardnerianum Wall.",
+                                 "Hedychium gardnerianum Sheppard",
+                                 "Hemidactylus frenatus Boie In Schlegel",
+                                 "Hemidactylus frenatus Kuhl & Van Hasselt In Schlegel",
+                                 "Leucaena leucocephala (Lam.) Dewit",
+                                 "Lycodon capucinus Boie In F.Boie, 1827",
+                                 "Myrica faya Dryand.",
+                                 "Psidium cattleianum Afzel.",
+                                 "Viverricula indica (Desmarest, 1804)")))
+
+length(unique(gbif_taxon_keys_terr_hb$original_sciname))
+length(unique(gbif_taxon_keys_terr_hb$canonicalname))
+
+nrow(gbif_taxon_keys_terr_hb %>% distinct(original_sciname, order))
+
+write.csv2(gbif_taxon_keys_terr_hb, "Output/Data_clean/01_145_IAS_to_model.csv",
+           row.names = F)
+
+
+##################### SP IN DASCO ?? #######################
+
+
+ias145 <- read.csv2("Output/Data_clean/01_145_IAS_to_model.csv")
+
+sp_dasco <- read.csv2("Z:/THESE/5_Data/Alien_data/Dasco/DASCO_AlienRegions_SInAS_2.4.1.csv")
+
+dsc <- sp_dasco %>% distinct(taxon, scientificName)
+unique(sp_dasco$location)
+
+in_dasco <- unique(sp_dasco %>% 
+  filter(taxon %in% ias145$canonicalname) %>%
+  pull(taxon))
+
+# what are the species absent from dasco?
+setdiff(ias145$canonicalname, in_dasco)
+
+# canis lupus familiaris = canis familiaris
+sp_dasco$taxon[grep("canis", tolower(sp_dasco$taxon))]
+# herpestes javanicus auropunctatus = herpestes auropunctatus
+sp_dasco$taxon[grep("herpestes", tolower(sp_dasco$taxon))]
+
+
+#try to find species name as in gbif ?
+sp_no_dasco <- ias145 %>%
+   filter(canonicalname %in% setdiff(ias145$canonicalname, in_dasco))
+
+sp_dasco %>% filter(scientificName %in% sp_no_dasco$scientificname)
+
+
+in_dasco <- c(in_dasco, "Canis lupus familiaris", "Herpestes javanicus auropunctatus")
+
+
+occ_dasc_obis <- read.csv2("Z:/THESE/5_Data/Alien_data/Dasco/DASCO_OBISCoords_SInAS_2.4.1.gz", sep = ",")
+occ_dasc_gbif <- read.csv2("Z:/THESE/5_Data/Alien_data/Dasco/DASCO_GBIFCoords_SInAS_2.4.1.gz", sep = ",")
+
+
+
+occ_dasc_obis_sp <- occ_dasc_obis %>%
+  filter(taxon %in% ias145$species)
+
+spkey <- ias145$specieskey
+usagekey <- ias145$usagekey # considère moins d'espèces 
+
+occ_dasc_gbif_sp <- occ_dasc_gbif %>%
+  filter(speciesKey %in% spkey)
+
+length(unique(occ_dasc_gbif_sp$speciesKey))
+
+unique(occ_dasc_obis_sp$taxon)
+
+
+# bind obis and gbif records
+sp_key_taxon <- ias145 %>%
+  distinct(specieskey, species) %>%
+  rename(speciesKey = specieskey,
+         taxon = species)
+# on tombe ici à 140 espèces uniques, parce que parmi nos 145 il y a des sous espèces
+
+
+colnames(occ_dasc_gbif_sp)
+colnames(occ_dasc_obis_sp)
+
+occ_dasc_gbif_sp_col <- left_join(
+  occ_dasc_gbif_sp, sp_key_taxon,
+  by = "speciesKey"
+)
+occ_dasc_obis_sp_col <- left_join(
+  occ_dasc_obis_sp, sp_key_taxon,
+  by = "taxon"
+)
+
+occ_all <- bind_rows(occ_dasc_gbif_sp_col, occ_dasc_obis_sp_col) %>%
+  mutate(LONG = as.numeric(Longitude),
+         LAT = as.numeric(Latitude)) %>%
+  select(-c(Latitude, Longitude))
+length(unique(occ_all$taxon))
+
+nb_occ_inv_tax <- table(occ_all$taxon)
+hist(log(table(occ_all$taxon)))
+
+library(sp)
+library(raster)
+
+convertcoord <- function(x){
+  WGScoor <-  x
+  sp::coordinates(WGScoor)=~LONG+LAT
+  sp::proj4string(WGScoor)<- CRS("+proj=longlat +datum=WGS84")
+  return(WGScoor)}
+
+ias_spatial_129 <- convertcoord(occ_all)
+
+saveRDS(ias_spatial_129, "Output/focus_ias_range/01_ias129_occ_dasco_alien_range")
+
+
+# ----------- From points to raster for each sp 
+
+ias_spatial_129 <- readRDS("Output/focus_ias_range/01_ias129_occ_dasco_alien_range")
+
+# world map to filter out oceanic ranges ?
+# library(rnaturalearth)
+# worldMap <- ne_countries(scale = "medium", type = "countries", returnclass = "sp")
+
+# INPUT : a spatial point object and a raster filled with 0
+# OUTPUT : a df containing all the cells with a point
+extract_cells_pts <- function(pts, rast){
+  
+  # extract cells with a point inside
+  c_pts <- extract(rast, pts, cellnumbers=TRUE)[,"cells"]
+  
+  # convert raster cells with values to 1 
+  rast_val <- rast
+  rast_val[c_pts] <- 1
+
+  # for saving memory, save a df containing all cells with values
+  df_val <- as.data.frame(rast_val, xy = TRUE) %>%
+    # remove empty cells
+    dplyr::filter(layer == 1) %>%
+    dplyr::mutate(binomial = unique(pts$taxon))
+  
+  return(df_val)
+}
+# herp = subset(ias_spatial_129, taxon == "Herpestes javanicus")
+# test <- extract_cells_pts(herp, raster0.1)
+
+raster0.1 <- raster(nrows=180, ncols=360, xmn=-180, xmx=180, ymn=-90, ymx=90,
+                    crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0",
+                    resolution = 0.1, vals=NULL)
+raster0.1[] <- 0
+
+library(pbapply)
+taxon <- as.list(unique(ias_spatial_129$taxon))
+
+df_129_ias <- pblapply(taxon, function(x){
+  pts_sp <- subset(ias_spatial_129, taxon == x)
+  cells <- extract_cells_pts(pts_sp, raster0.1)
+  return(cells)
+}) # takes 02m 13s
+
+saveRDS(df_129_ias, "Output/focus_ias_range/01_ias129_raster_df")
+
+#----------- MAP IAS SPECIES -----------
+
+df_129_ias <- readRDS("Output/focus_ias_range/01_ias129_raster_df")
+
+df_all <- bind_rows(df_129_ias) 
+
+
+# SR of 129 alien species
+ias_all_agg <- df_all %>%
+  group_by(x, y) %>%
+  summarise(SR_tot = n())
+
+
+SR_ias<- ggplot(data = ias_all_agg) +
+  geom_raster(aes(x = x, y = y, fill = SR_tot)) +
+  scale_fill_gradient(
+    low = "yellow", 
+    high = "red")+
+  #geom_sf(data = worldMap, alpha = 0.1) +
+  theme_classic() +
+  labs(title = "Species richness of the target IAS",
+       subtitle = paste0("Total number of IAS with at least one pixel: ",
+                         length(unique(df_all$binomial))),
+       x = "Longitude", y = "Latitude")
+SR_ias
+
+
+
+
+##### from df to raster to extract SR values for polygon islands
+library(raster)
+spg <- ias_all_agg
+coordinates(spg) <- ~ x + y
+# coerce to SpatialPixelsDataFrame
+gridded(spg) <- TRUE
+# coerce to raster
+ras_ias <- raster(spg)
+
+# world map to filter out oceanic ranges
+library(rnaturalearth)
+worldMap <- ne_countries(scale = "medium", type = "countries", returnclass = "sp")
+
+# pour chaque entité, extract the cells that fall into
+ext_world <- extract(ras_ias, worldMap)
+names(ext_world) <- worldMap$name
+
+# takes max
+ext_world_max <- lapply(ext_world, function(x){max(na.omit(x))})
+
+ext_world_max_df <- as.data.frame(unlist(ext_world_max)) %>%
+  mutate(id = worldMap$name)
+
+names(ext_world_max_df) <- c("max_ias", "id")
+
+worldMap.fort <- fortify(worldMap, region='name') 
+worldMap_df <- left_join(worldMap.fort, ext_world_max_df, by = "id")
+
+
+ggplot(worldMap_df)+
+  geom_polygon(aes(x=long, y=lat, group=group, fill = max_ias)) +
+  scale_fill_gradient(low = "white", high = "#AE123A")
+
+
+
+
+sp_no_dasco <- setdiff(sp_key_taxon$taxon, unique(df_all$binomial))
+sp_no_dasco
+
+
+
+occ_countries <- data.frame()
+for (name in sp_no_dasco){
+    obj <- rl_occ_country(name,
+                          key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")$result
+    obj$binomial = name
+    occ_countries <- bind_rows(occ_countries, obj)
+}
+length(unique(occ_countries$binomial))
+
+saveRDS(occ_countries,"Output/01_countries_occ_ias_iucn")
+
 
 # For species in IUCN, compute actual exposure
 # all grid cells were an invasive sp occur outside of its native range (IUCN)
@@ -379,8 +716,6 @@ names(native_area_sp) <- unique(native_countries$binomial)
 # for each sp, collect all occurrences in gbif
 gbif_occur <- native_area_sp
 
-library(giscoR)
-library(rgbif)
 
 # for(i in unique(native_countries$binomial)){
 #   native_area_sp[[i]] <- gisco_get_countries(
@@ -403,7 +738,7 @@ correct_names <- c("acacia catechu"="senegalia catechu",
 sp_list_for_gbif[sp_list_for_gbif %in% names(correct_names)] <- 
   correct_names
 
-
+df_count_rl$binomial_corr <- sp_list_for_gbif
 # test <- c("senegalia catechu", "sus scrofa", "rubus niveus")
 
 # fill in your gbif.org credentials 
@@ -427,6 +762,17 @@ gbif_taxon_keys <-
 
 length(unique(gbif_taxon_keys$original_sciname))
 length(unique(gbif_taxon_keys$canonicalname))
+
+nrow(gbif_taxon_keys %>% distinct(original_sciname, order))
+
+agg_class <- gbif_taxon_keys %>% distinct(original_sciname, phylum) %>% 
+  group_by(phylum) %>%
+  summarise(count=n())
+
+ggplot(agg_class, aes(x = reorder(phylum, count), y = count)) +
+  geom_bar(stat = 'identity') + xlab("")+
+  theme_classic() + coord_flip()
+
 
 
 occ_download(

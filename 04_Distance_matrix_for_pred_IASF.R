@@ -199,8 +199,10 @@ for(class in 1:3){
   
   
 }
+
 saveRDS(long_df_all_sp_bmr, "Output/distance_traits/04_dist_ias_as_to_group_eval")
 
+long_df_all_sp_bmr <- readRDS("Output/distance_traits/04_dist_ias_as_to_group_eval")
 
 eval_pred <- lapply(long_df_all_sp_bmr, function(x){
   
@@ -236,10 +238,106 @@ lapply(eval_pred, function(x){
 
 
 
+############################################################################
+
+
+# Load trait data
+data_ft_mam <- readRDS("Output/Data_clean/02_ft_all_native_mammals")
+data_ft_rept <- readRDS("Output/Data_clean/02_ft_all_native_reptiles")
+data_ft_bird <- readRDS("Output/Data_clean/02_ft_all_native_birds")
+# load threat data (global pool)
+df_all_threat <- readRDS("Output/Data_clean/02_threats_all_native_tetrapods")
+# load severe native (conservative pool)
+natives_to_include <- readRDS("Output/Data_clean/01_native_names_to_model")
+
+# --------------- Create a list with the 3 classes -----------------
+
+data_ft_bird$binomial = rownames(data_ft_bird)
+# traits to keep for each class 
+traits_mam <- c("Habitat","ln.Mass.g", "Main.diet","Activity",
+                "For.niche", "insular_endemic")
+traits_rept <- c("Habitat","max_log10_BM_g", "Repro.mode","Activity", 
+                 "For.niche", "insular_endemic")
+
+# select good traits for each class
+data_ft_mam_ok <- data_ft_mam %>%
+  select(binomial, all_of(traits_mam))
+data_ft_rept_ok <- data_ft_rept %>%
+  select(binomial, all_of(traits_rept))
+# keep same traits as in mechabirds for birds
+
+# create list
+data_ft_list <- list(
+  Bird = data_ft_bird,
+  Mam = data_ft_mam_ok,
+  Rept = data_ft_rept_ok
+)
+rm(data_ft_bird, data_ft_mam, data_ft_mam_ok, data_ft_rept, data_ft_rept_ok)
+
+# shape data_ft for calculating distance matrix
+data_ft_list <- lapply(data_ft_list, function(x){
+  rownames(x) <- x$binomial
+  x %>% select(-binomial) %>%
+    mutate_if(is.character, as.factor)
+})
+
+
+pcoa_list <- readRDS("Output/03_pcoa_coordinates_all_tetrapods")
+
+# keep best number of axes
+nbdim = 15
+mat_coord_list <- lapply(pcoa_list, function(x){
+  nbdim_select<-min(nbdim,ncol(x$vectors) )
+  # keeping species coordinates on the 'nbdim' axes
+  mat_coord<-x$vectors[,1:nbdim_select]
+  return(mat_coord)
+})
+
+mat_coord_best <- mat_coord_list
+
+for(i in names(data_ft_list)){
+  row.names(mat_coord_list[[i]])<-row.names(data_ft_list[[i]])
+  colnames(mat_coord_list[[i]])<-paste("PC",1:ncol(mat_coord_list[[i]]),sep="")
+  print(i)
+  
+  # check number of axis to retain 80% of variance
+  sum_var = 0
+  k=0
+  while (sum_var < 0.8){
+    k = k+1
+    sum_var = sum_var + pcoa_list[[i]]$values$Eigenvalues[k]/
+      sum(pcoa_list[[i]]$values$Eigenvalues[which(pcoa_list[[i]]$values$Eigenvalues>0)])
+    print(sum_var)
+  }
+  mat_coord_best[[i]] <- as.data.frame(mat_coord_list[[i]][,1:k])
+}
+
+
+pc_group <- as.list(1:3)
+for (i in 1:3){
+  pc_group[[i]] <- left_join(
+    assoc_threat_list[[i]],
+    mat_coord_best[[i]] %>% 
+      mutate(binomial = rownames(mat_coord_best[[i]])),
+    by = "binomial"
+  )
+}
+
+df_pc_group <- bind_rows(pc_group)
+
+ggplot(df_pc_group, aes(x = PC1)) +
+  geom_density(aes(group = Assoc_ias_2more, fill = Assoc_ias_2more), alpha = 0.5) +
+  facet_wrap(~Class)
+
+ggplot(df_pc_group, aes(x = PC2)) +
+  geom_density(aes(group = Assoc_ias_2more, fill = Assoc_ias_2more), alpha = 0.5) +
+  facet_wrap(~Class)
 
 
 
 
+
+############################################################################
 
 #------------- Initialize tables for metrics
 
