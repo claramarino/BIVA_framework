@@ -26,6 +26,8 @@ ias_x_native <- readRDS("Output/00_IAS_x_native_species") %>%
   mutate(ias_lower = gsub("_old", "", ias_lower)) %>%
   mutate(ias_lower = gsub("_new", "", ias_lower))
 sort(unique(ias_x_native$ias_lower))
+length(unique(ias_x_native$binomial_iucn))
+table(ias_x_native %>% distinct(binomial_iucn, Class) %>% pull (Class))
 
 # load 140 ias to model (more than 1 associated native)
 ias145 <- read.csv2("Output/Data_clean/01_145_IAS_to_model.csv")
