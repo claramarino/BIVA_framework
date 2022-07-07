@@ -27,108 +27,152 @@ arthro_key <- dl_metadata$arthro$key
 arthro_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", arthro_key, ".zip")))
 
 # get clean coordinates
-arthro_occ_clean <- clean_coord(arthro_occ)
+arthro_occ_clean <- clean_coord_base(arthro_occ)
 
 # remove points with flagged errors
-arthro_occ_clean_no_flag <- flag_rm(arthro_occ_clean)
+arthro_occ_clean_no_flag <- flag_rm_terr(arthro_occ_clean)
 
 # species difference?
-sp_diff(arthro_occ, arthro_occ_clean_no_flag) #no
-
-# transform to spatial point dataframe
-arthro_occ_sp_list <- occ_to_spatial_point(arthro_occ_clean_no_flag)
+sp_diff(arthro_occ, arthro_occ_clean_no_flag)
 
 final_sp_list_arthro <- gbif_taxo_2 %>%
-  filter(specieskey %in% names(arthro_occ_sp_list)) %>%
+  filter(specieskey %in% unique(arthro_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(arthro_occ_sp_list, "Output/Occurrences_clean/RISK_01_occ_arthro_full_range")
-saveRDS(final_sp_list_arthro, "Output/Occurrences_clean/RISK_01_arthro_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Arthropods"
 
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_arthro <- paste0(main_dir, sub_dir1)
+
+final_sp_list_arthro$n_occ <- numeric(nrow(final_sp_list_arthro))
+for(spk in unique(arthro_occ_clean_no_flag$speciesKey)){
+  occ_spk <- arthro_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_arthro$n_occ[final_sp_list_arthro$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_arthro, "/RISK_02_arthro_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_arthro, paste0(dir_arthro,"/RISK_02_arthro_sp_list_occ_clean"))
 
 #### CTENOMOL ####
 
-# get download key = file name
-cm_key <- dl_metadata$ctenomol$key
+ctenomol_key <- dl_metadata$ctenomol$key
 # read file
-cm_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", cm_key, ".zip")))
+ctenomol_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", ctenomol_key, ".zip")))
 
 # get clean coordinates
-cm_occ_clean <- clean_coord(cm_occ)
+ctenomol_occ_clean <- clean_coord_base(ctenomol_occ)
+
+# remove points with flagged errors
+ctenomol_occ_clean_no_flag <- flag_rm_terr(ctenomol_occ_clean)
 
 # species difference?
-sp_diff(cm_occ, cm_occ_clean) #no
+sp_diff(ctenomol_occ, ctenomol_occ_clean_no_flag)
 
-# transform to spatial point dataframe
-cm_occ_sp_list <- occ_to_spatial_point(cm_occ_clean)
-
-final_sp_list_cm <- gbif_taxo_2 %>%
-  filter(specieskey %in% names(cm_occ_sp_list)) %>%
+final_sp_list_ctenomol <- gbif_taxo_2 %>%
+  filter(specieskey %in% unique(ctenomol_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(cm_occ_sp_list, "Output/Occurrences_clean/RISK_01_occ_ctenomol_full_range")
-saveRDS(final_sp_list_cm, "Output/Occurrences_clean/RISK_01_ctenomol_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Cteno_Mol"
+
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_ctenomol <- paste0(main_dir, sub_dir1)
+
+final_sp_list_ctenomol$n_occ <- numeric(nrow(final_sp_list_ctenomol))
+for(spk in unique(ctenomol_occ_clean_no_flag$speciesKey)){
+  occ_spk <- ctenomol_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_ctenomol$n_occ[final_sp_list_ctenomol$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_ctenomol, "/RISK_02_ctenomol_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_ctenomol, paste0(dir_ctenomol,"/RISK_02_ctenomol_sp_list_occ_clean"))
 
 #### PLANTS ####
 
 plant_key <- dl_metadata$plants$key
-plants_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", plant_key, ".zip")))
+# read file
+plant_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", plant_key, ".zip")))
 
 # get clean coordinates
-plants_occ_clean <- clean_coord(plants_occ)
+plant_occ_clean <- clean_coord_base(plant_occ)
+
+# remove points with flagged errors
+plant_occ_clean_no_flag <- flag_rm_terr(plant_occ_clean)
 
 # species difference?
-sp_diff(plants_occ, plants_occ_clean) # 9 species
-rm(plants_occ)
-# transform to spatial point dataframe
-# chunck for large occ files 
+sp_diff(plant_occ, plant_occ_clean_no_flag)
 
-chunk_number = 10
-obj_to_spl <- unique(plants_occ_clean$speciesKey)
-obj_id_spl <- split(obj_to_spl, 
-                    cut(seq_along(obj_to_spl), chunk_number, labels = FALSE))
-
-for (chunk in names(obj_id_spl)){
-  taxons = obj_id_spl[[chunk]]
-  plants_occ_clean_chunk <- plants_occ_clean %>% 
-    filter(speciesKey %in% taxons)
-  plants_occ_sp_list_chunk <- occ_to_spatial_point(plants_occ_clean_chunk)
-  print(chunk)
-  saveRDS(plants_occ_sp_list_chunk, 
-          paste0("Output/Occurrences_clean/RISK_01_occ_plants_full_range_c", chunk))
-}
-
-final_sp_list_plants <- gbif_taxo_2 %>%
-  filter(specieskey %in% unique(plants_occ_clean$speciesKey)) %>%
+final_sp_list_plant <- gbif_taxo_2 %>%
+  filter(specieskey %in% unique(plant_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(final_sp_list_plants, "Output/Occurrences_clean/RISK_01_plants_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Plants"
 
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_plant <- paste0(main_dir, sub_dir1)
 
+final_sp_list_plant$n_occ <- numeric(nrow(final_sp_list_plant))
+for(spk in unique(plant_occ_clean_no_flag$speciesKey)){
+  occ_spk <- plant_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_plant$n_occ[final_sp_list_plant$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_plant, "/RISK_02_plant_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_plant, paste0(dir_plant,"/RISK_02_plant_sp_list_occ_clean"))
+
+length(unique(final_sp_list_plant$specieskey))
 
 #### AMPHIBIANS ####
 
-# get download key = file name
 amph_key <- dl_metadata$amph$key
 # read file
 amph_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", amph_key, ".zip")))
 
 # get clean coordinates
-amph_occ_clean <- clean_coord(amph_occ)
+amph_occ_clean <- clean_coord_base(amph_occ)
+
+# remove points with flagged errors
+amph_occ_clean_no_flag <- flag_rm_terr(amph_occ_clean)
 
 # species difference?
-sp_diff(amph_occ, amph_occ_clean) #no
-
-# transform to spatial point dataframe
-amph_occ_sp_list <- occ_to_spatial_point(amph_occ_clean)
+sp_diff(amph_occ, amph_occ_clean_no_flag)
 
 final_sp_list_amph <- gbif_taxo_2 %>%
-  filter(specieskey %in% names(amph_occ_sp_list)) %>%
+  filter(specieskey %in% unique(amph_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(amph_occ_sp_list, "Output/Occurrences_clean/RISK_01_occ_amph_full_range")
-saveRDS(final_sp_list_amph, "Output/Occurrences_clean/RISK_01_amph_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Amphibians"
 
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_amph <- paste0(main_dir, sub_dir1)
+
+final_sp_list_amph$n_occ <- numeric(nrow(final_sp_list_amph))
+for(spk in unique(amph_occ_clean_no_flag$speciesKey)){
+  occ_spk <- amph_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_amph$n_occ[final_sp_list_amph$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_amph, "/RISK_02_amph_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_amph, paste0(dir_amph,"/RISK_02_amph_sp_list_occ_clean"))
 
 
 #### REPTILES ####
@@ -139,43 +183,74 @@ rept_key <- dl_metadata$rept$key
 rept_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", rept_key, ".zip")))
 
 # get clean coordinates
-rept_occ_clean <- clean_coord(rept_occ)
+rept_occ_clean <- clean_coord_base(rept_occ)
+
+# remove points with flagged errors
+rept_occ_clean_no_flag <- flag_rm_terr(rept_occ_clean)
 
 # species difference?
-sp_diff(rept_occ, rept_occ_clean) #no
-
-# transform to spatial point dataframe
-rept_occ_sp_list <- occ_to_spatial_point(rept_occ_clean)
+sp_diff(rept_occ, rept_occ_clean_no_flag)
 
 final_sp_list_rept <- gbif_taxo_2 %>%
-  filter(specieskey %in% names(rept_occ_sp_list)) %>%
+  filter(specieskey %in% unique(rept_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(rept_occ_sp_list, "Output/Occurrences_clean/RISK_01_occ_rept_full_range")
-saveRDS(final_sp_list_rept, "Output/Occurrences_clean/RISK_01_rept_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Reptiles"
+
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_rept <- paste0(main_dir, sub_dir1)
+
+final_sp_list_rept$n_occ <- numeric(nrow(final_sp_list_rept))
+for(spk in unique(rept_occ_clean_no_flag$speciesKey)){
+  occ_spk <- rept_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_rept$n_occ[final_sp_list_rept$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_rept, "/RISK_02_rept_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_rept, paste0(dir_rept,"/RISK_02_rept_sp_list_occ_clean"))
 
 #### FISH ####
 
-# get download key = file name
 fish_key <- dl_metadata$fish$key
 # read file
 fish_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", fish_key, ".zip")))
 
 # get clean coordinates
-fish_occ_clean <- clean_coord(fish_occ)
+fish_occ_clean <- clean_coord_base(fish_occ)
+
+# remove points with flagged errors
+fish_occ_clean_no_flag <- flag_rm_terr(fish_occ_clean)
 
 # species difference?
-sp_diff(fish_occ, fish_occ_clean) #no
-
-# transform to spatial point dataframe
-fish_occ_sp_list <- occ_to_spatial_point(fish_occ_clean)
+sp_diff(fish_occ, fish_occ_clean_no_flag)
 
 final_sp_list_fish <- gbif_taxo_2 %>%
-  filter(specieskey %in% names(fish_occ_sp_list)) %>%
+  filter(specieskey %in% unique(fish_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(fish_occ_sp_list, "Output/Occurrences_clean/RISK_01_occ_fish_full_range")
-saveRDS(final_sp_list_fish, "Output/Occurrences_clean/RISK_01_fish_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Fish"
+
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_fish <- paste0(main_dir, sub_dir1)
+
+final_sp_list_fish$n_occ <- numeric(nrow(final_sp_list_fish))
+for(spk in unique(fish_occ_clean_no_flag$speciesKey)){
+  occ_spk <- fish_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_fish$n_occ[final_sp_list_fish$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_fish, "/RISK_02_fish_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_fish, paste0(dir_fish,"/RISK_02_fish_sp_list_occ_clean"))
 
 #### MAMMALS ####
 
@@ -185,77 +260,90 @@ mam_key <- dl_metadata$mam$key
 mam_occ <- readr::read_tsv(unzip(paste0("Data/GBIF_occurrences/", mam_key, ".zip")))
 
 # get clean coordinates
-mam_occ_clean <- clean_coord(mam_occ)
+mam_occ_clean <- clean_coord_base(mam_occ)
+
+# remove points with flagged errors
+mam_occ_clean_no_flag <- flag_rm_terr(mam_occ_clean)
 
 # species difference?
-sp_diff(mam_occ, mam_occ_clean) #no
-
-# transform to spatial point dataframe
-mam_occ_sp_list <- occ_to_spatial_point(mam_occ_clean)
+sp_diff(mam_occ, mam_occ_clean_no_flag)
 
 final_sp_list_mam <- gbif_taxo_2 %>%
-  filter(specieskey %in% names(mam_occ_sp_list)) %>%
+  filter(specieskey %in% unique(mam_occ_clean_no_flag$speciesKey)) %>%
   dplyr::distinct(specieskey, species, scientificname, original_sciname)
 
-saveRDS(mam_occ_sp_list, "Output/Occurrences_clean/RISK_01_occ_mam_full_range")
-saveRDS(final_sp_list_mam, "Output/Occurrences_clean/RISK_01_mam_sp_list")
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Mammals"
+
+if (!file.exists(sub_dir1)){
+  dir.create(file.path(main_dir, sub_dir1))
+}
+dir_mam <- paste0(main_dir, sub_dir1)
+
+final_sp_list_mam$n_occ <- numeric(nrow(final_sp_list_mam))
+for(spk in unique(mam_occ_clean_no_flag$speciesKey)){
+  occ_spk <- mam_occ_clean_no_flag %>%
+    filter(speciesKey == spk)
+  final_sp_list_mam$n_occ[final_sp_list_mam$specieskey==spk] <- 
+    nrow(occ_spk)
+  saveRDS(occ_spk, paste0(dir_mam, "/RISK_02_mam_occ_spk_", spk))
+}
+
+saveRDS(final_sp_list_mam, paste0(dir_mam,"/RISK_02_mam_sp_list_occ_clean"))
 
 #### BIRDS ####
 
-birds_key <- dl_metadata$birds$key
-nrow_birds <- dl_metadata$birds$totalRecords
+dl_metadata_b <- readRDS("Data/GBIF_occurrences/Birds/metadata_gbif_downloads_birds")
 
-# unzip file before
-# unzip(paste0("Data/GBIF_occurrences/", birds_key, ".zip"))
+for (k in 1:length(dl_metadata_b)){
+  #k=1
 
-split = 20
-chunk_size <- round(nrow_birds/split, 0)
-
-breaks_start = c((0:(split-1))*chunk_size)
-
-col_names_birds <- colnames(readr::read_tsv(
-  paste0(birds_key, ".csv"),
-  n_max = 1)) 
-
-for(s in 3:split){
+  b_key <- dl_metadata_b[[k]]$key
   
-  b_occ_s <- readr::read_tsv(
-    paste0(birds_key, ".csv"),
-    col_names = col_names_birds,
-    skip = breaks_start[s],
-    n_max = chunk_size-1)
+  unzip(paste0("Data/GBIF_occurrences/Birds/", b_key, ".zip"))
+  print(paste0("file ", k, " unzipped"))
   
-  print(paste("slot ", s,"/", split, "open"))
+  b_occ <- readr::read_tsv(paste0(b_key, ".csv"))
+  print(paste0("file ", k, " open"))
   
-  # get clean coordinates
-  b_occ_clean <- clean_coord(b_occ_s)
-  rm(b_occ_s)
+  b_occ_clean <- clean_coord_base(b_occ)
+  rm(b_occ)
   
-  # transform to spatial point dataframe
-  b_occ_sp_list <- occ_to_spatial_point(b_occ_clean)
+  b_occ_clean_no_flag <- flag_rm_terr(b_occ_clean)
+  rm(b_occ_clean)
   
   final_sp_list_b <- gbif_taxo_2 %>%
-    filter(specieskey %in% names(b_occ_sp_list)) %>%
-    dplyr::distinct(specieskey, species, scientificname, original_sciname) %>%
-    mutate(chunk = s)
+    filter(specieskey %in% unique(b_occ_clean_no_flag$speciesKey)) %>%
+    dplyr::distinct(specieskey, species, scientificname, original_sciname)
   
-  saveRDS(b_occ_sp_list, 
-          paste0("Output/Occurrences_clean/RISK_01_occ_birds_full_range_", s))
-  saveRDS(final_sp_list_b, 
-          paste0("Output/Occurrences_clean/RISK_01_bird_sp_list_", s))
+  main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+  sub_dir1 = "Birds"
   
-}
+  if (!file.exists(sub_dir1)){
+    dir.create(file.path(main_dir, sub_dir1))
+  }
+  dir_b <- paste0(main_dir, sub_dir1)
+  
+  final_sp_list_b$n_occ <- numeric(nrow(final_sp_list_b))
+  for(spk in unique(b_occ_clean_no_flag$speciesKey)){
+    occ_spk <- b_occ_clean_no_flag %>%
+      filter(speciesKey == spk)
+    final_sp_list_b$n_occ[final_sp_list_b$specieskey==spk] <- 
+      nrow(occ_spk)
+    saveRDS(occ_spk, paste0(dir_b, "/RISK_02_bird_occ_spk_", spk))
+  }
+  
+  saveRDS(final_sp_list_b, paste0(dir_b,"/RISK_02_bird_sp_list_occ_clean_", k))
+  
+  
+  }
 
 
 
 
 
 
-
-
-
-
-########################### PART 5 ####################################
+########################### BROUILLON ####################################
 
 
 gbif_taxo_2 <- readRDS("Output/Taxonomy/RISK_01_taxo_gbif_2")
@@ -396,6 +484,79 @@ for(sp in names(arthro_occ_sp_list)){
   proj4string(WGScoor)<- CRS("+proj=longlat +datum=WGS84")
   arthro_occ_sp_list[[sp]] <- WGScoor
 }
+
+
+# unzip file before
+# unzip(paste0("Data/GBIF_occurrences/", birds_key, ".zip"))
+
+
+# 2 étapes pour les oiseaux
+# étape 1 = ouvrir le fichier en chunck, clean coord de base, sauve par espèces 
+# étape 2 = appliquer le cleaning avec flag pour chaque sp, 
+# puis sauver comme les autres groupes
+
+# étape 1
+
+split = 20
+chunk_size <- round(nrow_birds/split, 0)
+
+breaks_start = c((0:(split-1))*chunk_size)
+
+col_names_birds <- colnames(readr::read_tsv(
+  paste0(birds_key, ".csv"),
+  n_max = 1)) 
+
+for(s in 11:split){
+  
+  s=11
+  library(data.table)
+  
+  col_names_birds <- fread(paste0(birds_key, ".csv"), nrows = 0, sep = "\t")
+  
+  b_occ_s <- readr::read_tsv(
+    paste0(birds_key, ".csv"),
+    col_names = col_names_birds,
+    skip = breaks_start[s],
+    n_max = chunk_size-1)
+  
+  print(paste("slot ", s,"/", split, "open"))
+  
+  # get clean coordinates
+  b_occ_clean <- clean_coord_base(b_occ_s)
+  rm(b_occ_s)
+  
+  list_sp_b_occ_clean <- unique(b_occ_clean$speciesKey)
+  
+  b_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Data/GBIF_occurrences/Birds/"
+  
+  for(spk in list_sp_b_occ_clean){
+    
+    occ_sp <- b_occ_clean %>%
+      filter(speciesKey == spk) %>%
+      mutate(
+        taxonKey = as.character(taxonKey),
+        speciesKey = as.character(speciesKey),
+        coordinatePrecision = as.character(coordinatePrecision),
+        year = as.character(year)
+      )
+    
+    if (file.exists(paste0(b_dir,spk))){
+      ori_file <- readRDS(paste0(b_dir,spk))
+      final_file <- bind_rows(ori_file, occ_sp) %>%
+        distinct()
+      saveRDS(final_file, paste0(b_dir,spk))
+    } else {
+      saveRDS(occ_sp, paste0(b_dir,spk))
+    }
+  }
+}
+
+
+# étape 2
+
+
+
+
 
 
 

@@ -166,24 +166,7 @@ occ_download_meta(plants_download)
 occ_download_get("0371024-210914110416597", path = "Data/GBIF_occurrences")
 
 
-####                     Chordata - birds                      ####
-
-gbif_birds <- gbif_taxo_2 %>% filter(class == "Aves")
-
-birds_download <- occ_download(
-  pred_in("taxonKey", unique(gbif_birds$usagekey)),
-  pred("hasCoordinate", TRUE),
-  pred("hasGeospatialIssue", FALSE),
-  format = "SIMPLE_CSV",
-  user=user,pwd=pwd,email=email
-)
-
-occ_download_meta(birds_download)
-
-occ_download_get("0371035-210914110416597", path = "Data/GBIF_occurrences")
-
-
-####                     Chordata - mammals                    ####
+###                     Chordata - mammals                    ####
 
 gbif_mam <- gbif_taxo_2 %>% filter(class == "Mammalia")
 
@@ -263,5 +246,132 @@ dl_metadata <- list(
 )
 
 saveRDS(dl_metadata, "Data/GBIF_occurrences/metadata_gbif_downloads")
+
+
+####                     Chordata - birds                      ####
+
+gbif_birds <- gbif_taxo_2 %>% filter(class == "Aves")
+
+# birds have too many occurrences for a single download
+# separate in small occurrences number, middle and high
+
+# count number of occ for each sp
+df_count <- gbif_birds %>%
+  distinct(usagekey, species) %>%
+  mutate(nb_occ = numeric(nrow(gbif_birds)))
+for (i in 1:nrow(df_count)){
+  df_count$nb_occ[i] <- occ_search(taxonKey = df_count$usagekey[i])$meta$count
+  print(i)
+}
+
+# select sp with a "small" nb of occurrences
+low_nb <- df_count %>% filter(nb_occ < 1000000)
+sum(low_nb$nb_occ)
+# download
+low_nb_birds_download <- occ_download(
+  pred_in("taxonKey", unique(low_nb$usagekey)),
+  pred("hasCoordinate", TRUE),
+  pred("hasGeospatialIssue", FALSE),
+  format = "SIMPLE_CSV",
+  user=user,pwd=pwd,email=email
+)
+
+meta_low = occ_download_meta(low_nb_birds_download)
+occ_download_get(meta_low$key, path = "Data/GBIF_occurrences/Birds/")
+
+# sp with medium nb of occ
+mid_nb <- df_count %>% filter(nb_occ > 1000000 & nb_occ< 2500000)
+sum(mid_nb$nb_occ)
+# download
+mid_nb_birds_download <- occ_download(
+  pred_in("taxonKey", unique(mid_nb$usagekey)),
+  pred("hasCoordinate", TRUE),
+  pred("hasGeospatialIssue", FALSE),
+  format = "SIMPLE_CSV",
+  user=user,pwd=pwd,email=email
+)
+
+meta_mid = occ_download_meta(mid_nb_birds_download)
+occ_download_get(meta_mid$key, path = "Data/GBIF_occurrences/Birds/")
+
+
+# sp with high nb of occ
+high_nb <- df_count %>% filter(nb_occ > 2500000)
+
+# do it one by one?
+download <- as.list(high_nb$usagekey)
+names(download) = high_nb$usagekey
+
+# Error: A download limitation is exceeded:
+#   User claramarino has too many simultaneous downloads; the limit is 3.
+# Please wait for some to complete, or cancel any unwanted downloads.  See your user page.
+
+# need to separate by 3 downloads
+
+for (sp in high_nb$usagekey[1:3]){
+  occ_download(
+    pred_in("taxonKey", sp),
+    pred("hasCoordinate", TRUE),
+    pred("hasGeospatialIssue", FALSE),
+    format = "SIMPLE_CSV",
+    user=user,pwd=pwd,email=email)
+}
+
+list_down <- occ_download_list(user=user,pwd=pwd, limit = 3)
+keys <- as.list(list_down$results$key)
+
+meta_high_1 <- lapply(keys, occ_download_meta)
+names(meta_high_1) <- high_nb$usagekey[1:3]
+
+for(sp in names(meta_high_1)){
+  if(isTRUE(meta_high_1[[sp]]$status == "SUCCEEDED")){
+    occ_download_get(meta_high_1[[sp]]$key,
+                     path = paste0("Data/GBIF_occurrences/Birds/"))
+  }
+}
+
+for (sp in high_nb$usagekey[4:6]){
+  occ_download(
+    pred_in("taxonKey", sp),
+    pred("hasCoordinate", TRUE),
+    pred("hasGeospatialIssue", FALSE),
+    format = "SIMPLE_CSV",
+    user=user,pwd=pwd,email=email)
+}
+
+list_down <- occ_download_list(user=user,pwd=pwd, limit = 3)
+keys <- as.list(list_down$results$key)
+
+meta_high_2 <- lapply(keys, occ_download_meta)
+names(meta_high_2) <- high_nb$usagekey[4:6]
+
+for(sp in names(meta_high_2)){
+  if(isTRUE(meta_high_2[[sp]]$status == "SUCCEEDED")){
+    occ_download_get(meta_high_2[[sp]]$key,
+                     path = paste0("Data/GBIF_occurrences/Birds/"))
+  }
+}
+
+# last high nb species
+last <- occ_download(
+  pred_in("taxonKey", high_nb$usagekey[7]),
+  pred("hasCoordinate", TRUE),
+  pred("hasGeospatialIssue", FALSE),
+  format = "SIMPLE_CSV",
+  user=user,pwd=pwd,email=email)
+meta_last <- occ_download_meta(last)
+occ_download_get(meta_last$key,
+                 path = paste0("Data/GBIF_occurrences/Birds/"))
+
+# save metadata for birds download
+
+dl_metadata_birds <- list(
+  birds_low_nb_occ = occ_download_meta(low_nb_birds_download),
+  birds_mid_nb_occ = occ_download_meta(mid_nb_birds_download),
+  birds_last = meta_last)
+dl_metadata_birds <- c(dl_metadata_birds, meta_high_1, meta_high_2)
+
+saveRDS(dl_metadata_birds, "Data/GBIF_occurrences/Birds/metadata_gbif_downloads_birds")
+
 
 
