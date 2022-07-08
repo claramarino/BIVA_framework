@@ -37,10 +37,10 @@ options(stringsAsFactors=FALSE)
 rm(list=ls())
 
 # load species list
-gbif_taxo_2 <- readRDS("Output/Taxonomy/RISK_01_taxo_gbif_2")
+sp_not_in_iucn <- readRDS("Output/Native_exotic_range/11_IAS_sp_NOT_in_IUCN")
 
 
-SpList <- unique(gbif_taxo_2$species) ##list of alien species to search for
+SpList <- unique(sp_not_in_iucn$species) ##list of alien species to search for
 
 
 ## check alien range
@@ -132,3 +132,4 @@ length(unique(df_clean$Species_or))
 write.csv(df_clean, "IASNH_sp_invasiveRange.csv")
 
 
+sort(setdiff(SpList, unique(df_clean$Species_or)))

@@ -333,10 +333,28 @@ for (k in 1:length(dl_metadata_b)){
     saveRDS(occ_spk, paste0(dir_b, "/RISK_02_bird_occ_spk_", spk))
   }
   
-  saveRDS(final_sp_list_b, paste0(dir_b,"/RISK_02_bird_sp_list_occ_clean_", k))
+  saveRDS(final_sp_list_b, paste0(dir_b,"/temp/RISK_02_bird_sp_list_occ_clean_", k))
   
   
   }
+
+
+# combine the 9 species list together
+
+main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
+sub_dir1 = "Birds"
+
+dir_b <- paste0(main_dir, sub_dir1)
+
+sp_list_all <- data.frame()
+for (k in 1:9){
+  sp_list_k <- readRDS((paste0(dir_b,"/temp/RISK_02_bird_sp_list_occ_clean_", k)))
+  sp_list_all <- bind_rows(sp_list_all, sp_list_k)
+}
+
+
+saveRDS(sp_list_all, paste0(dir_b,"/RISK_02_bird_sp_list_occ_clean"))
+
 
 
 

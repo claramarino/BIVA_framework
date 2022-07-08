@@ -10,19 +10,40 @@ library(rredlist)
 
 main_dir <- "Z:/THESE/6_Projects/predict_vulnerability/Output/Occurrences_clean/"
 fold <- list.dirs(main_dir)
+clean_fold <- fold[-c(1,5)]
 
-all_sp_list <- vector(mode = "list", length = length(fold)-1)
+clean_fold
+
+
+all_sp_list <- vector(mode = "list", length = length(clean_fold))
 
 for(i in 1:length(all_sp_list)){
-  fil <- list.files(fold[i+1])
+  fil <- list.files(clean_fold[i])
   sp_file <- fil[grepl("sp_list", fil)]
-  all_sp_list[[i]] <- readRDS(paste0(fold[i+1], "/", sp_file))
+  all_sp_list[[i]] <- readRDS(paste0(clean_fold[i], "/", sp_file))
 }
 
 all_sp <- bind_rows(all_sp_list)
 
+length(unique(all_sp$specieskey))
+
+
+# after cleaning, some species have less than ten occurrences
+all_sp %>% filter(n_occ<10)
+
+# due to taxo pbm (forget to look for some species but only search for synonyms?)
 
 gbif_taxo_2 <- readRDS("Output/Taxonomy/RISK_01_taxo_gbif_2")
+
+uk <- unique(gbif_taxo_2$usagekey)
+spk <- unique(gbif_taxo_2$specieskey)
+
+spk_in_uk <- spk[spk %in% uk]
+
+spk_not_uk <- spk[!spk %in% uk]
+
+tax_prob <- gbif_taxo_2 %>% filter(specieskey %in% spk_not_uk)
+
 
 
 sp_gbif <- left_join(all_sp, gbif_taxo_2, by = "scientificname")
@@ -69,12 +90,30 @@ syno_ias <- readRDS("Output/Synonyms/11_IUCN_synonyms_ias_from_gbif") %>%
 # }
 
 iucn_search_ias <- readRDS("Output/Native_exotic_range/11_IAS_sp_in_IUCN") 
+
 ias_in_iucn <- iucn_search_ias %>%
   filter(!is.na(taxonid)) %>% 
   mutate(ias_name = tolower(ias_name)) %>% 
   distinct(ias_name) %>% pull(ias_name)
 
+
+#### Separate species in IUCN for retrieve native range #####
+
+
+
+
+
+
+
+#### Save species list not in IUCN for script 13 #####
+
 ias_not_in_iucn <- sp_unique[!sp_unique %in% ias_in_iucn]
 
+sp_not_in_iucn_table <- gbif_taxo_2 %>%
+  mutate(spe_lower = tolower(species)) %>%
+  filter(spe_lower %in% ias_not_in_iucn)
+
+
+saveRDS(sp_not_in_iucn_table, "Output/Native_exotic_range/11_IAS_sp_NOT_in_IUCN")
 
 
