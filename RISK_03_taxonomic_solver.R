@@ -113,6 +113,23 @@ all_sp_clean <- bind_rows(
   dupl_new_key) %>%
   distinct(original_sciname, new_key, new_species, new_n_occ) 
 
+# check unicity species_name x key
+uni <- all_sp_clean %>%
+  distinct(new_key,new_species)
+
+uni$new_key[duplicated(uni$new_key)]
+uni$new_species[duplicated(uni$new_species)]
+
+# change Hemidactylus marbouia for new sp key and occ nb
+all_sp_clean$new_species[all_sp_clean$new_key=="5959942"] <- new_name
+all_sp_clean$new_n_occ[all_sp_clean$new_key=="5959942"] <- new_occ
+all_sp_clean$new_key[all_sp_clean$new_key=="5959942"] <- final_key_hemi
+# check unicity species_name x key
+uni <- all_sp_clean %>%
+  distinct(new_key,new_species)
+# 327 ias, OK !!
+
+
 # check that all occurrences are in new directory
 
 # previous dir
@@ -135,7 +152,11 @@ for (l in 1:nrow(all_sp_clean)){
 length(list.files("Output/Occurrences_clean_taxo_ok/", full.names = T))
 length(unique(all_sp_clean$new_key))
 
-# 328 unique IAS with GBIF occurrences
+# 327 unique IAS with GBIF occurrences
+
+# save species list
+
+saveRDS(all_sp_clean, "Output/Occurrences_clean_taxo_ok/RISK_03_ias_list_with_occ")
 
 
 ##### Write corresp table with IUCN native x IAS #####
