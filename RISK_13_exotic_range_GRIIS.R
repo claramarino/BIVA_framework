@@ -1,48 +1,57 @@
 # RISK find alien range from GRIIS using Anna's script
 
-######################## IASNH interactions ############################
-########################################################################
-## script by Anna J. Turbelin
-## created on 05 October 2021
+rm(list=ls())
 
-##package for GBIF data cleaning
-library(dplyr)
-library(purrr)
+library(tidyverse)
 library(readr)  
-library(magrittr) # for %T>% pipe
-library(rgbif) # for occ_download
-library(taxize) # for get_gbifid_
-library(gdistance)
-library(spThin)
-library(rworldmap)
-library(rworldxtra)
-library(maptools)
-library(maps)
 library(data.table)
-library(bRacatus)
-library(shinyjs)
-library(stringr)
-library(countrycode)
-library(CoordinateCleaner)
-library(readxl)
-library(sp)
-library(rgdal)
-library(raster)
-library(dismo)
-library(rJava)
+# library(spThin)
+# library(rworldmap)
+# library(rworldxtra)
+# library(maptools)
+# library(maps)
+# 
+# library(bRacatus)
+# library(shinyjs)
+# library(countrycode)
+# library(CoordinateCleaner)
+# library(readxl)
+# library(sp)
+# library(rgdal)
+# library(raster)
+# library(dismo)
+# library(rJava)
 
 options(stringsAsFactors=FALSE)
 
 
-rm(list=ls())
-
 # load species list
-sp_not_in_iucn <- readRDS("Output/Native_exotic_range/11_IAS_sp_NOT_in_IUCN")
+sp_info <- readRDS("Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
 
+nat_path <- "Output/Native_exotic_range/Native_IUCN/"
+nat_files <- list.files(nat_path)
 
-SpList <- unique(sp_not_in_iucn$species) ##list of alien species to search for
+sp_key <- unique(sp_info$new_key)
 
+sp_info <- sp_info %>% mutate(IUCN_real = "NO")
 
+for(k in sp_key){
+  nat_k <- nat_files[grepl(paste0("spk_", k), nat_files)]
+  if(!is_empty(nat_k)){ 
+    sp_info$IUCN_real[sp_info$new_key==k] <- "YES"
+  }
+}
+
+sp_inf_u <- sp_info %>%
+  distinct(new_key, ias_in_iucn, IUCN_real)
+table(sp_inf_u$ias_in_iucn)
+table(sp_inf_u$IUCN_real)
+
+##list of alien species to search for
+# = all alien species that have no native range from IUCN
+SpList <- unique(sp_info$new_species[sp_info$IUCN_real=="NO"]) 
+
+SpList <- "Castor canadensis"
 ## check alien range
 path_griis <- "Z:/THESE/5_Data/Alien_data/GRIIS_data_Anna"
 list_dir <- list.dirs(path_griis, recursive=FALSE) #list folders' names in GRIIS_data folder - contains all GRIIS datasets except protected areas  
@@ -133,3 +142,70 @@ write.csv(df_clean, "IASNH_sp_invasiveRange.csv")
 
 
 sort(setdiff(SpList, unique(df_clean$Species_or)))
+
+sp_info <- readRDS("Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
+sp_key <- unique(sp_info$new_key)
+
+sp_not_in_GRIIS <- sp_info %>% 
+  filter(new_species %in% setdiff(SpList, unique(df_clean$Species_or)))
+
+
+
+
+################################################
+
+# phasianus colchicus
+
+data("world")
+dat <- world
+dat$pc <- ifelse(dat$iso_a2 %in% df_clean$countryCode, "1", "0")
+ggplot() +
+  geom_sf(data = dat, aes(fill = pc) )
+
+# all occurrences
+pc_occ_all <- readRDS("Output/Occurrences_clean_taxo_ok/RISK_03_all_occ_spk_9752149")
+
+pc_occ_all$alien <- ifelse(pc_occ_all$countryCode %in% df_clean$countryCode, "1", "0")
+table(pc_occ_all$alien)
+
+library(sf)
+pc_alien <- pc_occ_all %>%
+  filter(alien=="1") %>%
+  mutate_at(vars(LONG, LAT), as.numeric) %>%   # coordinates must be numeric
+  st_as_sf(
+    coords = c("LONG", "LAT"),
+    agr = "constant",
+    crs = "+proj=longlat +datum=WGS84",
+    stringsAsFactors = FALSE,
+    remove = TRUE)
+
+ggplot() +
+  geom_sf(data = dat, aes(fill = pc) ) +
+  geom_sf(data = pc_alien)
+
+# castor canadensis
+
+data("world")
+dat <- world
+dat$cc <- ifelse(dat$iso_a2 %in% df_clean$countryCode, "1", "0")
+ggplot() +
+  geom_sf(data = dat, aes(fill = pc) )
+
+
+cc_occ_all <- readRDS("Output/Occurrences_clean_taxo_ok/RISK_03_all_occ_spk_2439838")
+cc_occ_all$alien <- ifelse(cc_occ_all$countryCode %in% df_clean$countryCode, "1", "0")
+table(cc_occ_all$alien)
+pc_alien <- cc_occ_all %>%
+  filter(alien=="1") %>%
+  mutate_at(vars(LONG, LAT), as.numeric) %>%   # coordinates must be numeric
+  st_as_sf(
+    coords = c("LONG", "LAT"),
+    agr = "constant",
+    crs = "+proj=longlat +datum=WGS84",
+    stringsAsFactors = FALSE,
+    remove = TRUE)
+
+ggplot() +
+  geom_sf(data = dat, aes(fill = cc) ) +
+  geom_sf(data = pc_alien)
+
