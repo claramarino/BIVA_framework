@@ -10,7 +10,7 @@ library(readr)
 library(sp)
 library(spatialEco)
 library(sf)
-
+library(rredlist)
 
 
 # load species list
@@ -198,5 +198,122 @@ final_sp_list_IUCN_GARD <- c(final_sp_list_IUCN, unique(rept_gard_nat$Binomial))
 saveRDS(final_sp_list_IUCN_GARD, paste0("Output/Native_exotic_range/Native_IUCN",
                                    "/RISK_12_sp_list_native_range_IUCN_GARD"))
 
+#### PLANTS, MoLLUSC, ARTHRO####
+
+# spatial data for all plants combined
+# need to download each plant manually
+# create one folder per plant species (and one mollusc)
+
+plant_moll_sp <- ias_in_iucn %>% 
+  filter(phylum !="CHORDATA") %>%
+  filter(terrestrial_system=="TRUE") %>%
+  pull(scientific_name)
+
+data_path <- "Z:/THESE/5_Data/Distribution_spatiale/3_IUCN_Manual_downloads_2022/"
+
+for (sp in plant_moll_sp){
+  if (!dir.exists(paste0(data_path, sp))){ 
+    dir.create(paste0(data_path, sp))
+    }
+}
+
+sort(plant_moll_sp)
+
+#######
+# TELECHARGEMENT A LA MAIN SUR IUCN WEB des range natifs des plantes
+# pour plantes avec poly => méthode clasisque
+# pour plantes avec points ou plantes sans données => utilisation des pays 
+ 
+
+#######
+no_download <- c()
+sp_with_poly <- c()
+sp_with_point <- c()
+for(sp in plant_moll_sp){
+  
+  # detect empty folders => no_download group
+  files = list.files(paste0(data_path, sp))
+  if (length(files)==0){
+    no_download <- c(no_download, sp)
+    next
+  }
+  
+  poly_file = paste0(data_path, sp, "/data_0.shp")
+  point_file = paste0(data_path, sp, "/points_data.csv")
+  
+  if(file.exists(poly_file)){
+    shp_file <- st_read(poly_file)
+    sp_poly <- shp_file %>% filter(ORIGIN %in% c(1,2))
+    sp_key <- ias_in_iucn_k$new_key[ias_in_iucn_k$scientific_name == sp]
+    saveRDS(sp_poly, paste0("Output/Native_exotic_range/Native_IUCN",
+                            "/RISK_12_native_range_IUCN_spk_", sp_key))
+    sp_with_poly <- c(sp_with_poly, sp)
+  } else {
+    sp_with_point <- c(sp_with_point, sp)
+  }
+}
+
+# on a bien toutes les plantes ?
+setdiff(plant_moll_sp, c(sp_with_point, sp_with_poly, no_download)) # oui
+
+# only 9 with polygons
+# for the rest, use native countries from IUCN
+# save as for GRIIS 
+
+sp_no_poly <- c(sp_with_point, no_download)
+
+# search for IUCN countries with API key
+occ_countries <- data.frame()
+for (sp in sp_no_poly){
+  obj <- rl_occ_country(
+    sp, key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")$result
+  obj$binomial = sp
+  occ_countries <- bind_rows(occ_countries, obj)
+}
+
+native_countries <- occ_countries %>%
+  filter(origin %in% c("Native","Reintroduced","Vagrant"))
+length(unique(native_countries$binomial))
+setdiff(unique(occ_countries$binomial),unique(native_countries$binomial))
+# "Hedychium coronarium" has no native range => replace by range origin = uncertain
+final_nat_countries <- bind_rows(
+  native_countries,
+  occ_countries %>% filter(binomial=="Hedychium coronarium" & origin=="Origin Uncertain")
+) %>% distinct()
 
 
+# save country list for each sp 
+for(sp in sp_no_poly){
+  sp_countries <- final_nat_countries %>% filter(binomial == sp)
+  sp_key <- ias_in_iucn_k$new_key[ias_in_iucn_k$scientific_name == sp]
+  
+  saveRDS(sp_countries, paste0("Output/Native_exotic_range/Native_IUCN",
+                          "/RISK_12_native_countries_IUCN_spk_", sp_key))
+}
+
+
+
+#######
+
+chordata_list <- readRDS(paste0("Output/Native_exotic_range/Native_IUCN",
+               "/RISK_12_sp_list_native_range_IUCN_GARD"))
+
+all_list_nat_range <- c(chordata_list, sp_with_poly)
+all_list_nat_country <- sp_no_poly
+freshwater <- ias_in_iucn_k %>% 
+  filter(terrestrial_system=="FALSE") %>% pull(scientific_name)
+
+ias_in_iucn_k_fin <- ias_in_iucn_k %>%
+  mutate(iucn_output = "NA") %>%
+  mutate(iucn_output = if_else(
+    scientific_name %in% all_list_nat_range, "NAT_RANGE_POLY", iucn_output)) %>%
+  mutate(iucn_output = if_else(
+    scientific_name %in% all_list_nat_country, "NAT_COUNTRY_LIST", iucn_output)) %>%
+  mutate(iucn_output = if_else(
+    scientific_name %in% freshwater, "FRESHWATER", iucn_output)) %>%
+  distinct(new_key, iucn_output)
+
+sp_info_tot <- left_join(sp_info, ias_in_iucn_k_fin, by ="new_key")
+
+
+saveRDS(sp_info_tot, "Output/Native_exotic_range/RISK_12_ias_list_with_occ_IUCN_dwld")

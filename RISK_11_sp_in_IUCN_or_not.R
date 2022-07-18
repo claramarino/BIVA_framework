@@ -102,10 +102,3 @@ all_ias_with_occ_iucn_check <- all_ias_with_occ%>%
 
 saveRDS(all_ias_with_occ_iucn_check, "Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
 
-
-#### Separate species in IUCN for retrieve native range #####
-
-
-
-
-
