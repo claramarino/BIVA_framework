@@ -5,53 +5,21 @@ rm(list=ls())
 library(tidyverse)
 library(readr)  
 library(data.table)
-# library(spThin)
-# library(rworldmap)
-# library(rworldxtra)
-# library(maptools)
-# library(maps)
-# 
-# library(bRacatus)
-# library(shinyjs)
-# library(countrycode)
-# library(CoordinateCleaner)
-# library(readxl)
-# library(sp)
-# library(rgdal)
-# library(raster)
-# library(dismo)
-# library(rJava)
+
 
 options(stringsAsFactors=FALSE)
 
 
 # load species list
-sp_info <- readRDS("Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
+sp_info <- readRDS("Output/Native_exotic_range/RISK_12_ias_list_with_occ_IUCN_dwld") %>%
+  mutate(iucn_output = if_else(is.na(iucn_output), "NA",iucn_output))
 
-nat_path <- "Output/Native_exotic_range/Native_IUCN/"
-nat_files <- list.files(nat_path)
 
-sp_key <- unique(sp_info$new_key)
-
-sp_info <- sp_info %>% mutate(IUCN_real = "NO")
-
-for(k in sp_key){
-  nat_k <- nat_files[grepl(paste0("spk_", k), nat_files)]
-  if(!is_empty(nat_k)){ 
-    sp_info$IUCN_real[sp_info$new_key==k] <- "YES"
-  }
-}
-
-sp_inf_u <- sp_info %>%
-  distinct(new_key, ias_in_iucn, IUCN_real)
-table(sp_inf_u$ias_in_iucn)
-table(sp_inf_u$IUCN_real)
-
-##list of alien species to search for
+## list of alien species to search for
 # = all alien species that have no native range from IUCN
-SpList <- unique(sp_info$new_species[sp_info$IUCN_real=="NO"]) 
+SpList <- unique(sp_info$new_species[sp_info$iucn_output == "NA"]) 
 
-SpList <- "Castor canadensis"
+
 ## check alien range
 path_griis <- "Z:/THESE/5_Data/Alien_data/GRIIS_data_Anna"
 list_dir <- list.dirs(path_griis, recursive=FALSE) #list folders' names in GRIIS_data folder - contains all GRIIS datasets except protected areas  
@@ -132,27 +100,47 @@ for (j in 1:length(SpList)){
   list_dir <- list.dirs(path_griis, recursive=FALSE)
 }
 
-df_clean <- na.omit(df)
+df_clean <- na.omit(df) %>% 
+  #remove possible duplicates due to scientific name synonyms
+  select(-scientificName) %>% distinct()
 
 str(df_clean)
 
 length(unique(df_clean$Species_or))
 
-write.csv(df_clean, "IASNH_sp_invasiveRange.csv")
+#### Save country list for each alien species ####
+
+sp_in_griis <- unique(df_clean$Species_or)
+# load initial species list for spk
+sp_info <- readRDS("Output/Native_exotic_range/RISK_12_ias_list_with_occ_IUCN_dwld")
+
+for(sp in sp_in_griis){
+  sp_countries <- df_clean %>% 
+    rename(new_species = Species_or) %>%
+    filter(new_species == sp)
+  sp_key <- unique(sp_info$new_key[sp_info$new_species == sp])
+  
+  saveRDS(sp_countries, paste0("Output/Native_exotic_range/Exotic_GRIIS",
+                               "/RISK_13_exotic_countries_GRIIS_spk_", sp_key))
+}
 
 
-sort(setdiff(SpList, unique(df_clean$Species_or)))
+#### Save species list #####
 
-sp_info <- readRDS("Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
-sp_key <- unique(sp_info$new_key)
+# add specification for species in GRIIS
+sp_info_fin <- sp_info %>%
+  rename(nat_exo_info = iucn_output) %>%
+  mutate(nat_exo_info = if_else(
+    new_species %in% sp_in_griis, "EXO_COUNTRY_GRIIS", nat_exo_info))
 
-sp_not_in_GRIIS <- sp_info %>% 
-  filter(new_species %in% setdiff(SpList, unique(df_clean$Species_or)))
+saveRDS(sp_info_fin, "Output/Native_exotic_range/RISK_13_ias_list_with_occ_IUCN_GRIIS")
+
+table(sp_info_fin$nat_exo_info)
 
 
 
 
-################################################
+######################## BROUILLON ########################
 
 # phasianus colchicus
 

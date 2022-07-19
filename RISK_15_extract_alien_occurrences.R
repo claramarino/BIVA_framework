@@ -12,7 +12,7 @@ library(sp)
 library(sf)
 
 # species key
-sp_info <- readRDS("Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
+sp_info <- readRDS("Output/Native_exotic_range/RISK_14_ias_list_with_occ_ALL_DB_nat_exo")
 
 sp_key <- unique(sp_info$new_key)
 
