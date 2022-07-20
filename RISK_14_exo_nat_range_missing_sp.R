@@ -49,6 +49,8 @@ poly_state <- st_make_valid(poly_state)
 
 for(sp in sp_in_cabi){
   
+  #sp=sp_in_cabi[2]
+  
   cabi_range <- read_csv(paste0(cabi_fold, sp, ".csv"), skip = 1)
   native_cabi <- cabi_range %>% filter(Origin=="Native") %>%
     mutate(species = sp)
@@ -70,7 +72,7 @@ for(sp in sp_in_cabi){
       crs = "+proj=longlat +datum=WGS84",
       stringsAsFactors = FALSE,
       remove = TRUE)
-    # join points and polygons 
+  # join points and polygons 
   occ_in_count <- st_join(occ_sf, poly_countr, join = st_within, left = T)
   # search for "countries" without polygon
   no_count <- occ_in_count %>% filter(is.na(name)) %>% select(-name)
@@ -97,7 +99,7 @@ for(sp in sp_in_cabi){
       rename(name = name_en)
   )
   
-  spk = unique(sp_info$new_key[sp_info$new_species==names(sp_in_cabi[sp])])
+  spk = unique(sp_info$new_key[sp_info$new_species==names(sp_in_cabi[which(sp_in_cabi==sp)])])
   
   saveRDS(final_range, 
           paste0("Output/Native_exotic_range/Other_database/",
@@ -199,7 +201,7 @@ sp_info$nat_exo_info[sp_info$new_key==key_ceodes] <- "NAT_COUNTRY_HAND"
 
 
 ############ SAVE INFO TABLE #############
-table(sp_info$nat_exo_info)
+table(sp_info %>% distinct(new_key, nat_exo_info) %>% pull(nat_exo_info))
 
 saveRDS(sp_info, "Output/Native_exotic_range/RISK_14_ias_list_with_occ_ALL_DB_nat_exo")
 

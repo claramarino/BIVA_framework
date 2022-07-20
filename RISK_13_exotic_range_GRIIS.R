@@ -135,7 +135,7 @@ sp_info_fin <- sp_info %>%
 
 saveRDS(sp_info_fin, "Output/Native_exotic_range/RISK_13_ias_list_with_occ_IUCN_GRIIS")
 
-table(sp_info_fin$nat_exo_info)
+table(sp_info_fin %>% distinct(new_key, nat_exo_info) %>% pull(nat_exo_info))
 
 
 

@@ -198,7 +198,7 @@ final_sp_list_IUCN_GARD <- c(final_sp_list_IUCN, unique(rept_gard_nat$Binomial))
 saveRDS(final_sp_list_IUCN_GARD, paste0("Output/Native_exotic_range/Native_IUCN",
                                    "/RISK_12_sp_list_native_range_IUCN_GARD"))
 
-#### PLANTS, MoLLUSC, ARTHRO####
+#### PLANTS, MoLLUSC, ARTHRO, FISH ####
 
 # spatial data for all plants combined
 # need to download each plant manually
@@ -206,30 +206,33 @@ saveRDS(final_sp_list_IUCN_GARD, paste0("Output/Native_exotic_range/Native_IUCN"
 
 plant_moll_sp <- ias_in_iucn %>% 
   filter(phylum !="CHORDATA") %>%
-  filter(terrestrial_system=="TRUE") %>%
+  pull(scientific_name)
+
+# add fish
+fish_sp <- ias_in_iucn %>% filter(class=="ACTINOPTERYGII") %>%
   pull(scientific_name)
 
 data_path <- "Z:/THESE/5_Data/Distribution_spatiale/3_IUCN_Manual_downloads_2022/"
 
-for (sp in plant_moll_sp){
+for (sp in c(plant_moll_sp, fish_sp)){
   if (!dir.exists(paste0(data_path, sp))){ 
     dir.create(paste0(data_path, sp))
     }
 }
 
-sort(plant_moll_sp)
+sort(c(plant_moll_sp, fish_sp))
 
 #######
 # TELECHARGEMENT A LA MAIN SUR IUCN WEB des range natifs des plantes
 # pour plantes avec poly => méthode clasisque
 # pour plantes avec points ou plantes sans données => utilisation des pays 
- 
+# Même méthode pout les fish
 
 #######
 no_download <- c()
 sp_with_poly <- c()
 sp_with_point <- c()
-for(sp in plant_moll_sp){
+for(sp in c(fish_sp, plant_moll_sp)){
   
   # detect empty folders => no_download group
   files = list.files(paste0(data_path, sp))
@@ -253,10 +256,10 @@ for(sp in plant_moll_sp){
   }
 }
 
-# on a bien toutes les plantes ?
-setdiff(plant_moll_sp, c(sp_with_point, sp_with_poly, no_download)) # oui
+# on a bien toutes les plantes/fish ?
+setdiff(c(plant_moll_sp,fish_sp), c(sp_with_point, sp_with_poly, no_download)) # oui
 
-# only 9 with polygons
+# only 9 plants with polygons, 1 arthro, 11 fish
 # for the rest, use native countries from IUCN
 # save as for GRIIS 
 
@@ -309,9 +312,9 @@ ias_in_iucn_k_fin <- ias_in_iucn_k %>%
     scientific_name %in% all_list_nat_range, "NAT_RANGE_POLY", iucn_output)) %>%
   mutate(iucn_output = if_else(
     scientific_name %in% all_list_nat_country, "NAT_COUNTRY_LIST", iucn_output)) %>%
-  mutate(iucn_output = if_else(
-    scientific_name %in% freshwater, "FRESHWATER", iucn_output)) %>%
-  distinct(new_key, iucn_output)
+  mutate(freshwater = if_else(
+    scientific_name %in% freshwater, "WATER_ONLY", "TERRESTRIAL")) %>%
+  distinct(new_key, iucn_output, freshwater)
 
 sp_info_tot <- left_join(sp_info, ias_in_iucn_k_fin, by ="new_key")
 
