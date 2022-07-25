@@ -167,13 +167,11 @@ ggplot(data = tot_range_area, aes(x=log_cells, y=log_area, color = class)) +
 cor.test(tot_range_area$n_cells_range, tot_range_area$area)
 
 
-
+##### Compute final raw exposure ####
 
 df_all_range <- left_join(df_all %>% dplyr::select(-new_key), 
                           tot_range,
                            by = "new_species")
-
-
 
 # calculate cell related metrics
 ias_all_agg <- df_all_range %>%
