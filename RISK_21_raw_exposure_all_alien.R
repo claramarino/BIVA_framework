@@ -63,7 +63,7 @@ occ_path <- "Output/True_exposure_alien_species/"
 occ_files <- list.files(occ_path)
 
 # output folder
-out_fold = "Output/Raster_metrics/Exposure_raw/"
+out_fold = "Output/Exposure/Exposure_raw/"
 
 # initialise empty list
 all_sp_cells_0.1 <- vector(mode = "list", length = length(occ_files))
@@ -94,7 +94,7 @@ for (i in 1:length(occ_files)){
 #### Explore results ####
 
 # output folder
-out_fold = "Output/Raster_metrics/Exposure_raw/"
+out_fold = "Output/Exposure/Exposure_raw/"
 all_sp_cells <- readRDS(paste0(out_fold, "RISK_21_raster_cells_308_IAS_r1"))
 # combine df for each sp into one df
 df_all <- bind_rows(all_sp_cells) 

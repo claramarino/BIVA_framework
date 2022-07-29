@@ -9,7 +9,7 @@ library(raster)
 
 
 # Load exposure data
-out_fold = "Output/Raster_metrics/Exposure_raw/"
+out_fold = "Output/Exposure/Exposure_raw/"
 all_sp_cells <- readRDS(paste0(out_fold, "RISK_21_raster_cells_308_IAS_r1"))
 # combine df for each sp into one df
 df_all <- bind_rows(all_sp_cells) 

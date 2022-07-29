@@ -179,16 +179,125 @@ saveRDS(sensit_tbl, paste0("Output/Sensitivity/RISK_33_sensitivity_table_r", deg
 deg = "01"
 sensit_tbl <- readRDS(paste0("Output/Sensitivity/RISK_33_sensitivity_table_r", deg))
 
+summary(sensit_tbl)
+
+# normalize sensitivity values between 0-1 to compare cells 
+# 3 methods for rescaling variables
+
+# max min linear
+
+maxcol <- apply(sensit_tbl, 2, max)
+mincol <- apply(sensit_tbl, 2, min)
+
+sensit_tbl_norm_lin <- sensit_tbl
+for (i in 3:length(maxcol)){
+  sensit_tbl_norm_lin[,i] <- (sensit_tbl_norm_lin[,i]-mincol[i])/(maxcol[i]-mincol[i])
+}
+
+summary(sensit_tbl_norm_lin)
+
+
+#log transform and max min linear
+maxlog <- apply(sensit_tbl, 2, function(x){max(log(x+1))})
+minlog <- apply(sensit_tbl, 2, function(x){min(log(x+1))})
+sensit_tbl_norm_log <- sensit_tbl
+for (i in 3:length(maxlog)){
+  sensit_tbl_norm_log[,i] <- (log(sensit_tbl_norm_log[,i]+1)-minlog[i])/
+    (maxlog[i]-minlog[i])
+}
+summary(sensit_tbl_norm_log)
+
+
+# cumulative distribution
+var_rank <- sensit_tbl %>% 
+  dplyr::select(-c(x,y)) %>% 
+  mutate_all(dense_rank)
+sensit_tbl_rank <- bind_cols(sensit_tbl %>% dplyr::select(x,y), var_rank)
+
+maxrank <- apply(sensit_tbl_rank, 2, max)
+minrank <- apply(sensit_tbl_rank, 2, min)
+
+for (i in 3:length(maxcol)){
+  sensit_tbl_rank[,i] <- (sensit_tbl_rank[,i]-minrank[i])/(maxrank[i]-minrank[i])
+}
+
+summary(sensit_tbl_rank)
+
+
+
+saveRDS(sensit_tbl_norm_log, 
+        paste0("Output/Sensitivity/RISK_33_sensitivity_norm_log_r", deg))
+saveRDS(sensit_tbl_norm_lin, 
+        paste0("Output/Sensitivity/RISK_33_sensitivity_norm_lin_r", deg))
+saveRDS(sensit_tbl_rank, 
+        paste0("Output/Sensitivity/RISK_33_sensitivity_norm_rank_r", deg))
+
+
+
+
+
+# correlations betweens normalized var
 library(ggcorrplot)
+mcor <- cor(sensit_tbl_norm)
+ggcorrplot(mcor[-c(1,2), -c(1,2)])
 
+# map normalized sensitivity
+
+#bmr IAS-A
+snorm <- ggplot(data = sensit_tbl_norm) +
+  geom_raster(aes(x = x, y = y, fill = SR_iasa_bmr)) +
+  scale_fill_gradient(
+    low = "white", 
+    high = "red")+
+  #geom_sf(data = worldMap, alpha = 0.1) +
+  theme_classic()
+snorm
+#bmr IAS-T
+snorm <- ggplot(data = sensit_tbl_norm) +
+  geom_raster(aes(x = x, y = y, fill = SR_iast_bmr)) +
+  scale_fill_gradient(
+    low = "white", 
+    high = "red")+
+  #geom_sf(data = worldMap, alpha = 0.1) +
+  theme_classic()
+snorm
+
+
+ggplot(sensit_tbl_norm) +
+  geom_point(aes(x=SR_iast_bmr, y=SR_iasa_bmr))
+
+ggplot(sensit_tbl_norm) +
+  geom_point(aes(x=SR_iasa_m, y=SR_iasa_r))
+ggplot(sensit_tbl_norm) +
+  geom_point(aes(x=SR_iasa_b, y=SR_iasa_r))
+ggplot(sensit_tbl_norm) +
+  geom_point(aes(x=SR_iasa_m, y=SR_iasa_b))
+
+hist(sensit_tbl_norm$SR_iasa_bmr)
+hist(sensit_tbl_norm$SR_iasa_b)
+hist(sensit_tbl_norm$SR_iasa_m)
+hist(sensit_tbl_norm$SR_iasa_r)
+
+
+
+
+
+
+
+
+
+
+
+
+# try correlations between raw variables 
 mcor <- cor(sensit_tbl)
-
 ggcorrplot(mcor[-c(1,2), -c(1,2)])
 
 norm_sens <- sensit_tbl %>% 
   mutate(ias_a_norm = SR_iasa_m/SR_tot_m,
          ias_t_norm = SR_iast_m/SR_tot_m)
-  
+
+summary(norm_sens)
 
 SR_bmr_a <- ggplot(data = norm_sens %>% filter(ias_a_norm>0)) +
   geom_raster(aes(x = x, y = y, fill = ias_a_norm)) +
