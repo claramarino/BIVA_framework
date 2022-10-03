@@ -88,7 +88,39 @@ ggplot(data = sensi_fin) +
     high = "red")+
   theme_classic()
 
+ggplot(data = sensi_fin) +
+  geom_raster(aes(x = x, y = y, fill = SR_tot_bmr)) +
+  scale_fill_gradient(
+    low = "green", 
+    high = "red")+
+  theme_classic()
 
+
+
+ggplot(data = sensi_fin)+
+  geom_smooth(aes(x=y, y=SR_tot_bmr, color = "SR_tot_bmr"))+
+  geom_smooth(aes(x=y, y=SR_iasa_bmr, color = "SR_iasa_bmr"))+
+  geom_smooth(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
+  scale_colour_manual(name="Metric",
+                      values=c(SR_tot_bmr="turquoise", SR_iasa_bmr="firebrick", expo_tot_norm="gold3")) +
+  xlab("Latitude") + ylab("Value (normalized)")+
+  theme_classic()
+  
+ 
+
+ggplot(data = expo)+
+  geom_smooth(aes(x=y, y=SR_tot_ias, color = "SR_tot_ias"))+
+  geom_smooth(aes(x=y, y=range_med, color = "range_med"))+
+  geom_smooth(aes(x=y, y=med_iasa_tot, color = "med_iasa_tot"))+
+  geom_smooth(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
+  scale_colour_manual(name="Metric",
+                      values=c(SR_tot_ias="coral", range_med="chartreuse2", 
+                               med_iasa_tot = "cyan2", expo_tot_norm="gold3")) +
+  xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
+  theme_classic()
+
+
+csummary(expo)
 
 #### Combine exposure and sensitivity #####
 

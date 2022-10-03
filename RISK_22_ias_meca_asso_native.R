@@ -32,6 +32,92 @@ ias_nat_count <- ias_x_native %>%
   pivot_wider(names_from = threatened, values_from = n, values_fill = 0) %>%
   mutate(IAS_A_tot = `T` + NT_DD + EX_EW)
 
+# add number of IAS-AS
+
+ias_as <- ias_x_native %>% 
+  distinct(scientificName, ias_gbif_key, ias_species, scope, severity) %>%
+  mutate(IAS_AS = if_else(
+    scope %in% c("Majority (50-90%)","Whole (>90%)") & 
+      severity %in% c("Slow, Significant Declines", "Rapid Declines", "Very Rapid Declines"), 
+    "IAS_AS", "no")) %>%
+  count(ias_gbif_key, ias_species, IAS_AS) %>%
+  pivot_wider(names_from = IAS_AS, values_from = n, values_fill = 0) %>%
+  select(ias_gbif_key, ias_species, IAS_AS)
+
+# 125 IAS with 1 or + native severely associated
+
+ias_nat_count <- left_join(ias_nat_count, ias_as)
+
+##### CHECK per species effect and EICAT impact ####
+
+# EICAT
+eicat <- read.csv2("Z:/THESE/6_Projects/mechanisms_birds/Data/EICAT_birds_2016.csv") %>%
+  mutate(binomial = paste(Gender, Species, sep=" ")) %>%
+  select(binomial, Impact_cate, Impact_mecha, Assessment)
+
+eicat_nat <- left_join(eicat, ias_nat_count %>% rename(binomial = ias_species),
+                       by = "binomial") %>%
+  filter(!is.na(ias_gbif_key))
+
+ggplot(data = eicat_nat, aes(x = Impact_cate, y = IAS_A_tot))+
+  geom_point(position = "jitter")
+ggplot(data = eicat_nat) +
+  # geom_point(aes(x = Impact_cate, y = IAS_A_tot),
+  #            color = "black", position = "jitter") +
+  geom_point(aes(x = Impact_cate, y = NT_DD),
+             color = "turquoise", position = "jitter", show.legend = T) +
+  geom_point(aes(x = Impact_cate, y = `T`),
+             color = "orange", position = "jitter", show.legend = T) +
+  geom_point(aes(x = Impact_cate, y = EX_EW),
+             color = "firebrick", position = "jitter", show.legend = T)
+
+
+eicat_nat_l <- eicat_nat %>% pivot_longer(
+  cols = NT_DD:IAS_AS,
+  names_to = "group_nat",
+  values_to = "nb_sp") %>%
+  mutate(Impact_cate2 = if_else(Impact_cate %in% c('MO','MR','MV'), "harmful", "_non_harmful")) %>%
+  mutate(Impact_cate2 = if_else(Impact_cate =="DD", "_DD", Impact_cate2))
+
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat!="IAS_A_tot") %>%
+         filter(nb_sp>0))+
+  geom_boxplot(aes(x = Impact_cate2, y = nb_sp, color = group_nat))
+  
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat!="IAS_A_tot") %>%
+         filter(nb_sp>0))+
+  geom_point(aes(x = Impact_cate2, y = nb_sp, color = group_nat), alpha=0.5, position ="jitter")
+
+
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat=="IAS_A_tot"))+
+  geom_boxplot(aes(x = Impact_cate, y = nb_sp))+
+  geom_point(aes(x = Impact_cate, y = nb_sp), alpha=0.5, position ="jitter")
+
+
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat=="IAS_AS"))+
+  geom_boxplot(aes(x = Impact_cate, y = nb_sp))+
+  geom_point(aes(x = Impact_cate, y = nb_sp), alpha=0.5, position ="jitter")
+
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat=="IAS_AS") %>%
+         filter(nb_sp>0))+
+  geom_boxplot(aes(x = Impact_cate, y = nb_sp))+
+  geom_point(aes(x = Impact_cate, y = nb_sp), alpha=0.5, position ="jitter")
+
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat=="IAS_AS") %>%
+         filter(nb_sp>0))+
+  geom_boxplot(aes(x = Impact_cate2, y = nb_sp))+
+  geom_point(aes(x = Impact_cate2, y = nb_sp), alpha=0.5, position ="jitter")
+
+ggplot(data = eicat_nat_l %>% 
+         filter(group_nat=="IAS_AS") %>%
+         filter(nb_sp>0))+
+  geom_boxplot(aes(x = Impact_cate, y = nb_sp))+
+  geom_point(aes(x = Impact_cate, y = nb_sp), alpha=0.5, position ="jitter")
 
 ##### IAS mechanisms #####
 
@@ -151,7 +237,46 @@ head(scope_sev)
 
 # compute one value of severity per IAS
 ias_sco_sev <- scope_sev %>% group_by(ias_gbif_key) %>%
-  summarize(sco_sev_ias = max(sco_sev))
+  summarize(sco_sev_ias = max(sco_sev),
+            med_sco_sev = median(sco_sev),
+            sco = max(scope_norm),
+            sev = max(sev_norm))
+
+###### Link with EICAT
+
+eicat_nat <-  eicat_nat %>%
+  mutate(Impact_cate2 = if_else(Impact_cate %in% c('MO','MR','MV'), "harmful", "_non_harmful")) %>%
+  mutate(Impact_cate2 = if_else(Impact_cate =="DD", "_DD", Impact_cate2))
+
+# check if ias scosev is consistent with EICAT score
+ias_sev_eicat <- inner_join(eicat_nat, ias_sco_sev)
+ggplot(data = ias_sev_eicat)+
+  geom_boxplot(aes(x = Impact_cate, y = sco_sev_ias))+
+  geom_point(aes(x = Impact_cate, y = sco_sev_ias), position = "jitter")
+
+ggplot(data = ias_sev_eicat %>% filter(Assessment!="Low"))+
+  geom_boxplot(aes(x = Impact_cate2, y = sco_sev_ias))+
+  geom_point(aes(x = Impact_cate2, y = sco_sev_ias), position = "jitter")
+
+ggplot(data = ias_sev_eicat)+
+  geom_boxplot(aes(x = Impact_cate2, y = med_sco_sev))+
+  geom_point(aes(x = Impact_cate2, y = med_sco_sev), position = "jitter")
+
+ggplot(data = ias_sev_eicat)+
+  geom_boxplot(aes(x = Impact_cate2, y = sco))+
+  geom_point(aes(x = Impact_cate2, y = sco), position = "jitter")
+ggplot(data = ias_sev_eicat)+
+  geom_boxplot(aes(x = Impact_cate2, y = sev))+
+  geom_point(aes(x = Impact_cate2, y = sev), position = "jitter")
+
+
+
+
+
+
+
+
+
 # join with IAS meca
 ias_sev_mecha <- inner_join(ias_mecha_count_maj, ias_sco_sev)
 # link meca /severity

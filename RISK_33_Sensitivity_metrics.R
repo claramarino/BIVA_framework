@@ -195,6 +195,8 @@ for (i in 3:length(maxcol)){
 }
 
 summary(sensit_tbl_norm_lin)
+hist(sensit_tbl_norm_lin$SR_iasa_bmr)
+
 
 
 #log transform and max min linear
@@ -206,6 +208,7 @@ for (i in 3:length(maxlog)){
     (maxlog[i]-minlog[i])
 }
 summary(sensit_tbl_norm_log)
+hist(sensit_tbl_norm_log$SR_iasa_bmr)
 
 
 # cumulative distribution
