@@ -8,7 +8,7 @@ library(tidyverse)
 
 
 # select degree resolution
-deg = "01" # can be "1" or "01"
+deg = "1" # can be "1" or "01"
 
 # select the type of normalization
 norm = "log" # can be "rank", "log", or "lin"
@@ -17,7 +17,6 @@ norm = "log" # can be "rank", "log", or "lin"
 expo <- readRDS(paste0("Output/Exposure/RISK_24_expo_norm_", norm,"_r", deg))
 # load sensitivity
 sensi <- readRDS(paste0("Output/Sensitivity/RISK_33_sensitivity_norm_", norm,"_r", deg))
-
 
 
 ####### Normalized exposure ########
@@ -106,21 +105,62 @@ ggplot(data = sensi_fin)+
   xlab("Latitude") + ylab("Value (normalized)")+
   theme_classic()
   
- 
+
+ggplot(data = sensi_fin)+
+  geom_smooth(aes(x=y, y=SR_tot_bmr, color = "SR_tot_bmr"))+
+  geom_point(aes(x=y, y=SR_iasa_bmr, color = "SR_iasa_bmr"))+
+  scale_colour_manual(name="Metric",
+                      values=c(SR_tot_bmr="turquoise", SR_iasa_bmr="firebrick", expo_tot_norm="gold3")) +
+  xlab("Latitude") + ylab("Value (normalized)")+
+  theme_classic()
+
+metric_col = c(SR_tot_ias="coral", range_med="chartreuse2", 
+               med_iasa_tot = "cyan2", expo_tot_norm="gold3")
 
 ggplot(data = expo)+
   geom_smooth(aes(x=y, y=SR_tot_ias, color = "SR_tot_ias"))+
   geom_smooth(aes(x=y, y=range_med, color = "range_med"))+
   geom_smooth(aes(x=y, y=med_iasa_tot, color = "med_iasa_tot"))+
   geom_smooth(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
-  scale_colour_manual(name="Metric",
-                      values=c(SR_tot_ias="coral", range_med="chartreuse2", 
-                               med_iasa_tot = "cyan2", expo_tot_norm="gold3")) +
+  scale_colour_manual(name="Metric", values=metric_col) +
   xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
   theme_classic()
 
 
-csummary(expo)
+
+ggplot(data = expo)+
+  geom_point(aes(x=y, y=SR_tot_ias, color = "SR_tot_ias"))+
+  geom_point(aes(x=y, y=range_med, color = "range_med"))+
+  geom_point(aes(x=y, y=med_iasa_tot, color = "med_iasa_tot"))+
+  #geom_point(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
+  scale_colour_manual(name="Metric", values=metric_col) +
+  xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
+  theme_classic()
+
+ggplot(data = expo)+
+  geom_point(aes(x=y, y=SR_tot_ias, color = "SR_tot_ias"))+
+  scale_colour_manual(name="Metric", values=metric_col) +
+  xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
+  theme_classic()
+
+ggplot(data = expo)+
+  geom_point(aes(x=y, y=range_med, color = "range_med"))+
+  scale_colour_manual(name="Metric", values=metric_col) +
+  xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
+  theme_classic()
+ggplot(data = expo)+
+  geom_point(aes(x=y, y=med_iasa_tot, color = "med_iasa_tot"))+
+  scale_colour_manual(name="Metric", values=metric_col) +
+  xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
+  theme_classic()
+
+ggplot()+
+  geom_point(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
+  scale_colour_manual(name="Metric", values=metric_col) +
+  xlab("Latitude") + ylab("Value (normalized)")+ ylim(c(0,1))+
+  theme_classic()
+
+summary(expo)
 
 #### Combine exposure and sensitivity #####
 

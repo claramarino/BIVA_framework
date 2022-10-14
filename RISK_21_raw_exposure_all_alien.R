@@ -101,6 +101,12 @@ df_all <- bind_rows(all_sp_cells)
 
 str(df_all)
 
+# add area correction
+area_r1 <- as.data.frame(area(raster1), xy=T) %>% rename(area = layer)
+area_r01 <- as.data.frame(area(raster0.1), xy = T) %>% rename(area = layer)
+
+plot(area_r1$area, area_r1$y)
+
 # for each ias, calculate max range
 tot_range <- df_all %>%
   group_by(new_key, new_species) %>%
