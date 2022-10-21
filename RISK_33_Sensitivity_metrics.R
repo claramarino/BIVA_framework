@@ -10,6 +10,15 @@ library(readr)
 # different possible resolutions (computed for 0.1 & 1 degree)
 deg = "01" # chose 1 or 01
 
+# correct by area of each cell
+degnum = .1
+
+library(raster)
+rast = raster(nrows=180, ncols=360, xmn=-180, xmx=180, ymn=-90, ymx=90,
+              crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0",
+              resolution = degnum, vals=NULL)
+area <- as.data.frame(area(rast), xy=T) %>% rename(area = layer)
+
 #### Load total SR ####
 
 sr_fold <- "Output/Sensitivity/SR_Tot_native_all_BMR/"
@@ -29,9 +38,17 @@ sr_b <- bind_rows(sr_b1, sr_b2, sr_b3, sr_b4) %>%
 rm(sr_b1, sr_b2, sr_b3, sr_b4)
 
 
-sr_bmr <- bind_rows(sr_b, sr_m, sr_r) %>%
-  group_by(x, y) %>%
-  summarise(SR_tot_bmr = sum (SR_tot))
+sr_bmr <- inner_join(
+  area,
+  bind_rows(sr_b, sr_m, sr_r) %>%
+    group_by(x, y) %>%
+    summarise(SR_tot_bmr = sum (SR_tot)))
+
+
+sr_bmr_area <- sr_bmr %>%
+  mutate(SR_tot_bmr_area = SR_tot_bmr/area)
+ggplot(sr_bmr_area, aes(y, SR_tot_bmr_area))+
+  geom_smooth()
 
 #### Load cells IAS-A ####
 
@@ -180,47 +197,53 @@ deg = "01"
 sensit_tbl <- readRDS(paste0("Output/Sensitivity/RISK_33_sensitivity_table_r", deg))
 
 summary(sensit_tbl)
+rm(area)
+# correct all metrics by area 
+sensit_tbl_corr <- sensit_tbl %>%
+  mutate_at(vars(contains('SR_')), list(by_area=~.*100/area))
+
 
 # normalize sensitivity values between 0-1 to compare cells 
 # 3 methods for rescaling variables
 
 # max min linear
 
-maxcol <- apply(sensit_tbl, 2, max)
-mincol <- apply(sensit_tbl, 2, min)
+maxcol <- apply(sensit_tbl_corr, 2, max)
+mincol <- apply(sensit_tbl_corr, 2, min)
 
-sensit_tbl_norm_lin <- sensit_tbl
+sensit_tbl_norm_lin <- sensit_tbl_corr
 for (i in 3:length(maxcol)){
   sensit_tbl_norm_lin[,i] <- (sensit_tbl_norm_lin[,i]-mincol[i])/(maxcol[i]-mincol[i])
 }
 
 summary(sensit_tbl_norm_lin)
 hist(sensit_tbl_norm_lin$SR_iasa_bmr)
-
+hist(sensit_tbl_norm_lin$SR_iasa_bmr_by_area)
 
 
 #log transform and max min linear
-maxlog <- apply(sensit_tbl, 2, function(x){max(log(x+1))})
-minlog <- apply(sensit_tbl, 2, function(x){min(log(x+1))})
-sensit_tbl_norm_log <- sensit_tbl
+maxlog <- apply(sensit_tbl_corr, 2, function(x){max(log(x+1))})
+minlog <- apply(sensit_tbl_corr, 2, function(x){min(log(x+1))})
+sensit_tbl_norm_log <- sensit_tbl_corr
 for (i in 3:length(maxlog)){
   sensit_tbl_norm_log[,i] <- (log(sensit_tbl_norm_log[,i]+1)-minlog[i])/
     (maxlog[i]-minlog[i])
 }
 summary(sensit_tbl_norm_log)
 hist(sensit_tbl_norm_log$SR_iasa_bmr)
+hist(sensit_tbl_norm_log$SR_iasa_bmr_by_area)
 
 
 # cumulative distribution
-var_rank <- sensit_tbl %>% 
-  dplyr::select(-c(x,y)) %>% 
+var_rank <- sensit_tbl_corr %>% 
+  dplyr::select(-c(x, y, area)) %>% 
   mutate_all(dense_rank)
-sensit_tbl_rank <- bind_cols(sensit_tbl %>% dplyr::select(x,y), var_rank)
+sensit_tbl_rank <- bind_cols(sensit_tbl_corr %>% dplyr::select(x,y), var_rank)
 
 maxrank <- apply(sensit_tbl_rank, 2, max)
 minrank <- apply(sensit_tbl_rank, 2, min)
 
-for (i in 3:length(maxcol)){
+for (i in 3:length(maxrank)){
   sensit_tbl_rank[,i] <- (sensit_tbl_rank[,i]-minrank[i])/(maxrank[i]-minrank[i])
 }
 
@@ -241,22 +264,30 @@ saveRDS(sensit_tbl_rank,
 
 # correlations betweens normalized var
 library(ggcorrplot)
-mcor <- cor(sensit_tbl_norm)
+mcor <- cor(sensit_tbl_norm_log)
 ggcorrplot(mcor[-c(1,2), -c(1,2)])
 
 # map normalized sensitivity
 
 #bmr IAS-A
-snorm <- ggplot(data = sensit_tbl_norm) +
-  geom_raster(aes(x = x, y = y, fill = SR_iasa_bmr)) +
+snorm <- ggplot(data = sensit_tbl_norm_log) +
+  geom_raster(aes(x = x, y = y, fill = SR_iasa_bmr_by_area)) +
   scale_fill_gradient(
     low = "white", 
     high = "red")+
   #geom_sf(data = worldMap, alpha = 0.1) +
   theme_classic()
 snorm
+
+
+
+ggplot(sensit_tbl_norm_lin)+
+  geom_smooth(aes(y, SR_iasa_bmr_by_area))+
+  geom_smooth(aes(y, SR_iasa_bmr), color = "red")
+
+
 #bmr IAS-T
-snorm <- ggplot(data = sensit_tbl_norm) +
+snorm <- ggplot(data = sensit_tbl_norm_log) +
   geom_raster(aes(x = x, y = y, fill = SR_iast_bmr)) +
   scale_fill_gradient(
     low = "white", 
