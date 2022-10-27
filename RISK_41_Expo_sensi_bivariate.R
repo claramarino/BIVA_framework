@@ -22,10 +22,20 @@ sensi <- readRDS(paste0("Output/Sensitivity/RISK_33_sensitivity_norm_", norm,"_r
 ####### Normalized exposure ########
 
 # final expo = sum of three exposure components
-plot(expo %>% dplyr::ungroup() %>% dplyr::select(-c(x,y)))
+plot(expo %>% dplyr::ungroup() %>% 
+       dplyr::select(-c(x,y, cells, area, SR_tot_ias)))
+
+cor.test(expo$SR_tot_ias_area, expo$med_iasa_tot)
+cor.test(expo$SR_tot_ias_area, expo$range_med)
+mod <- lm(range_med~SR_tot_ias_area, data = expo)
+summary(mod)
+
+hist(expo$SR_tot_ias)
+hist(expo$SR_tot_ias_area)
+
 
 expo_fin <- expo %>% ungroup() %>%
-  mutate(expo_tot = SR_tot_ias + range_med + med_iasa_tot) %>%
+  mutate(expo_tot = SR_tot_ias_area + range_med + med_iasa_tot) %>%
   mutate(expo_tot_norm = (expo_tot/max(expo_tot))) %>%
   dplyr::select(x, y, expo_tot_norm)
 
@@ -34,39 +44,39 @@ quantile(expo_fin$expo_tot_norm, c(0.33, 0.66))
 hist(expo_fin$expo_tot_norm)
 
 # plot final expo
-ggplot(data = expo_fin) +
+pexpo <- ggplot(data = expo_fin) +
   geom_raster(aes(x = x, y = y, fill = expo_tot_norm)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
-  theme_classic()
+  scale_fill_viridis_c()+
+  labs(title = "Total exposure")+
+  theme_map()
 
 # plot each component
 # richness
-ggplot(data = expo) +
-  geom_raster(aes(x = x, y = y, fill = SR_tot_ias)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
-  theme_classic()
+psr <- ggplot(data = expo) +
+  geom_raster(aes(x = x, y = y, fill = SR_tot_ias_area)) +
+  scale_fill_viridis_c()+
+  labs(title = "Alien species richness")+
+  theme_map()
 
 # range
-ggplot(data = expo) +
+prange <- ggplot(data = expo) +
   geom_raster(aes(x = x, y = y, fill = range_med)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
-  theme_classic()
+  scale_fill_viridis_c()+
+  labs(title = "Median alien range")+
+  theme_map()
 
 # strength (nb of native associated)
-ggplot(data = expo) +
+piasa <- ggplot(data = expo) +
   geom_raster(aes(x = x, y = y, fill = med_iasa_tot)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
-  theme_classic()
+  scale_fill_viridis_c()+
+  labs(title = "Alien impact breadth")+
+  theme_map()
 
 
+library(ggpubr)
+library(ggthemes)
+ggarrange(pexpo, psr, prange, piasa, ncol = 2, nrow = 2, common.legend = T)
+prange
 
 ####### Normalized sensitivity ########
 
@@ -74,51 +84,117 @@ mcor = cor(sensi)
 ggcorrplot(mcor)
 
 
-sensi_fin <- sensi %>% dplyr::select(x, y, SR_tot_bmr, SR_iasa_bmr)
+sensi_fin <- sensi %>% 
+  dplyr::select(x, y, SR_tot_bmr_by_area, SR_iasa_bmr_by_area)
 
-nrow(sensi_fin %>% filter(SR_iasa_bmr==0))
+nrow(sensi_fin %>% filter(SR_iasa_bmr_by_area==0))
 
 summary(sensi_fin)
 
-ggplot(data = sensi_fin) +
-  geom_raster(aes(x = x, y = y, fill = SR_iasa_bmr)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
-  theme_classic()
+pnat<- ggplot(data = sensi_fin) +
+  geom_tile(aes(x = x, y = y, fill = SR_iasa_bmr_by_area)) +
+  scale_fill_viridis_c()+
+  labs(title = "IAS-A species richness")+
+  theme_map()
 
-ggplot(data = sensi_fin) +
-  geom_raster(aes(x = x, y = y, fill = SR_tot_bmr)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
-  theme_classic()
+pnat_tot <- ggplot(data = sensi_fin) +
+  geom_tile(aes(x = x, y = y, fill = SR_tot_bmr_by_area)) +
+  scale_fill_viridis_c()+
+  labs(title = "Total amniote species richness")+
+  theme_map()
 
+
+mod_ias_tot <- lm(SR_iasa_bmr_by_area~SR_tot_bmr_by_area, data = sensi_fin)
+
+plot(mod_ias_tot)
+summary(mod_ias_tot)
+res_sensi <- residuals.lm(mod_ias_tot)
+str(res_sensi)
+
+# normalité des résidus ?
+hist(res_sensi)
+
+sensi_fin = bind_cols(sensi_fin, data.frame(res_iasa_tot = res_sensi))
+
+pres <- ggplot(data = sensi_fin) +
+  geom_tile(aes(x = x, y = y, fill = res_iasa_tot)) +
+  scale_fill_viridis_c()+
+  labs(title = "(IAS-A ~ total SR) residuals")+
+  theme_map()
+pres
+
+ggarrange(pnat_tot, pnat, pres, ncol = 2, nrow = 2, common.legend = T)
+
+
+#### Latitudinal gradient ####
 
 
 ggplot(data = sensi_fin)+
-  geom_smooth(aes(x=y, y=SR_tot_bmr, color = "SR_tot_bmr"))+
-  geom_smooth(aes(x=y, y=SR_iasa_bmr, color = "SR_iasa_bmr"))+
+  geom_smooth(aes(x=y, y=SR_tot_bmr_by_area, color = "SR_tot_bmr_by_area"))+
+  geom_smooth(aes(x=y, y=SR_iasa_bmr_by_area, color = "SR_iasa_bmr_by_area"))+
   geom_smooth(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
   scale_colour_manual(name="Metric",
-                      values=c(SR_tot_bmr="turquoise", SR_iasa_bmr="firebrick", expo_tot_norm="gold3")) +
+                      values=c(SR_tot_bmr_by_area="turquoise", 
+                               SR_iasa_bmr_by_area="firebrick", 
+                               expo_tot_norm="gold3")) +
   xlab("Latitude") + ylab("Value (normalized)")+
   theme_classic()
   
 
-ggplot(data = sensi_fin)+
-  geom_smooth(aes(x=y, y=SR_tot_bmr, color = "SR_tot_bmr"))+
-  geom_point(aes(x=y, y=SR_iasa_bmr, color = "SR_iasa_bmr"))+
+# remove polar circles?
+ggplot(data = sensi_fin %>% filter(y > -66.56333 & y < 66.56333 ))+
+  #geom_point(aes(x=y, y=res_iasa_tot))+
+  geom_smooth(aes(x=y, y=SR_tot_bmr_by_area, color = "SR_tot_bmr_by_area"))+
+  geom_smooth(aes(x=y, y=SR_iasa_bmr_by_area, color = "SR_iasa_bmr_by_area"))+
+  geom_smooth(aes(x=y, y=res_iasa_tot, color = "resid"))+
+  #geom_smooth(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
   scale_colour_manual(name="Metric",
-                      values=c(SR_tot_bmr="turquoise", SR_iasa_bmr="firebrick", expo_tot_norm="gold3")) +
+                      values=c(SR_tot_bmr_by_area="turquoise", 
+                               SR_iasa_bmr_by_area="firebrick",
+                               resid = "blue4",
+                               expo_tot_norm="gold3")) +
+  xlab("Latitude") + ylab("Value (normalized)")+
+  theme_classic()+
+  coord_flip()
+
+ggplot(data = expo %>% filter(y > -66.56333 & y < 66.56333 ))+
+  geom_smooth(data = expo_fin %>% filter(y > -66.56333 & y < 66.56333 ), 
+              aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
+  geom_smooth(aes(x=y, y=SR_tot_ias_area, color = "SR_tot_ias_area"))+
+  geom_smooth(aes(x=y, y=range_med, color = "range_med"))+
+  geom_smooth(aes(x=y, y = med_iasa_tot, color = "med_iasa_tot"))+
+  scale_colour_manual(name="Metric",
+                      values=c(med_iasa_tot="cyan3", 
+                               SR_tot_ias_area="deeppink4",
+                               expo_tot_norm = "blue4",
+                               range_med="darkslategray4")) +
+  xlab("Latitude") + ylab("Value (normalized)")+
+  theme_classic()+
+  coord_flip()
+
+hist(sensi_fin$y)
+
+ggplot(data = sensi_fin)+
+  geom_smooth(aes(x=y, y=SR_tot_bmr_by_area, color = "SR_tot_bmr"))+
+  geom_point(aes(x=y, y=SR_iasa_bmr_by_area, color = "SR_iasa_bmr"))+
+  scale_colour_manual(name="Metric",
+                      values=c(SR_tot_bmr="turquoise", SR_iasa_bmr="firebrick")) +
   xlab("Latitude") + ylab("Value (normalized)")+
   theme_classic()
 
-metric_col = c(SR_tot_ias="coral", range_med="chartreuse2", 
+ggplot(data = sensi_fin)+
+  geom_point(aes(x=y, y=SR_tot_bmr_by_area, color = "SR_tot_bmr"))+
+  geom_point(aes(x=y, y=SR_iasa_bmr_by_area, color = "SR_iasa_bmr"))+
+  scale_colour_manual(name="Metric",
+                      values=c(SR_tot_bmr="turquoise", SR_iasa_bmr="firebrick")) +
+  xlab("Latitude") + ylab("Value (normalized)")+
+  theme_classic()
+
+metric_col = c(SR_tot_ias_area="coral", range_med="chartreuse2", 
                med_iasa_tot = "cyan2", expo_tot_norm="gold3")
 
 ggplot(data = expo)+
-  geom_smooth(aes(x=y, y=SR_tot_ias, color = "SR_tot_ias"))+
+  geom_smooth(aes(x=y, y=SR_tot_ias_area, color = "SR_tot_ias_area"))+
   geom_smooth(aes(x=y, y=range_med, color = "range_med"))+
   geom_smooth(aes(x=y, y=med_iasa_tot, color = "med_iasa_tot"))+
   geom_smooth(data = expo_fin, aes(x=y, y=expo_tot_norm, color = "expo_tot_norm"))+
@@ -225,7 +301,7 @@ quantiles_expo <- expo_sensi %>%
 
 # create 3 buckets for mean income
 quantiles_sensi <- expo_sensi %>%
-  pull(SR_iasa_bmr) %>%
+  pull(SR_iasa_bmr_by_area) %>%
   quantile(probs = seq(0, 1, length.out = 4))
 
 # create color scale that encodes two variables
@@ -253,7 +329,7 @@ expo_sensi %<>%
       include.lowest = TRUE
     ),
     sensi_quantiles = cut(
-      SR_iasa_bmr,
+      SR_iasa_bmr_by_area,
       breaks = quantiles_sensi,
       include.lowest = TRUE
     ),

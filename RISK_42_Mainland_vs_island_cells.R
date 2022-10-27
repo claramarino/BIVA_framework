@@ -70,7 +70,7 @@ saveRDS(isl_cells1, "Output/Mainland_island/RISK_42_isl_ocean_cells_r1")
 ############### Separate Expo/Sensi by mainland vs islands ###################
 
 # select degree resolution
-deg = "01" # can be "1" or "01"
+deg = "1" # can be "1" or "01"
 # select the type of normalization
 norm = "log" # can be "rank", "log", or "lin"
 
@@ -85,14 +85,33 @@ isl <- readRDS(paste0("Output/Mainland_island/RISK_42_isl_ocean_cells_r", deg))
 
 
 expo_fin <- expo %>% ungroup() %>%
-  mutate(expo_tot = SR_tot_ias + range_med + med_iasa_tot) %>%
+  mutate(expo_tot = SR_tot_ias_area + range_med + med_iasa_tot) %>%
   mutate(expo_tot_norm = (expo_tot/max(expo_tot))) %>%
-  dplyr::select(x, y, expo_tot_norm)
+  dplyr::select(x, y, expo_tot_norm, range_med, med_iasa_tot, SR_tot_ias_area)
 
 
-sensi_fin <- sensi %>% dplyr::select(x, y, SR_tot_bmr, SR_iasa_bmr)
+# ajouter les résidues de sensibilité par rapport à la richesse tot
+mod_ias_tot <- lm(SR_iasa_bmr_by_area~SR_tot_bmr_by_area, data = sensi)
+mod_iast_tot <- lm(SR_iast_bmr_by_area~SR_tot_bmr_by_area, data = sensi)
 
-# separate by min /isl
+plot(mod_ias_tot)
+summary(mod_ias_tot)
+res_sensi <- residuals.lm(mod_ias_tot)
+res_sensi2 <- residuals(mod_ias_tot2)
+res_sensi_t <- residuals.lm(mod_iast_tot)
+str(res_sensi)
+cor.test(res_sensi, res_sensi2)
+
+# normalité des résidus ?
+hist(res_sensi)
+
+sensi_fin <- sensi %>% 
+  dplyr::select(x, y, SR_tot_bmr_by_area, SR_iasa_bmr_by_area,
+                SR_iast_bmr_by_area) %>%
+  mutate(res_iasa_tot = res_sensi,
+         res_iast_tot = res_sensi_t)
+
+# separate by main /isl
 
 expo_isl <- inner_join(expo_fin, isl, by=c("x","y"))
 expo_main <- inner_join(expo_fin, main, by=c("x","y"))
@@ -100,20 +119,82 @@ sensi_isl <- inner_join(sensi_fin, isl, by=c("x","y"))
 sensi_main <- inner_join(sensi_fin, main, by=c("x","y"))
 
 
-ggplot(data = sensi_main) +
-  geom_raster(aes(x = x, y = y, fill = SR_iasa_bmr)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
+pmain <- ggplot(data = sensi_main) +
+  geom_tile(aes(x = x, y = y, fill = res_iasa_tot)) +
+  scale_fill_viridis_c()+
+  theme_map()
+
+pisl <- ggplot(data = sensi_isl) +
+  geom_tile(aes(x = x, y = y, fill = res_iasa_tot)) +
+  scale_fill_viridis_c()+
   theme_classic()
 
-ggplot(data = sensi_isl) +
-  geom_raster(aes(x = x, y = y, fill = SR_iasa_bmr)) +
-  scale_fill_gradient(
-    low = "green", 
-    high = "red")+
+hist(sensi_main %>% filter(SR_iast_bmr_by_area>0) %>% pull(res_iast_tot), n=50)
+hist(sensi_isl %>% filter(SR_iast_bmr_by_area>0) %>% pull(res_iast_tot), n=50)
+hist(sensi_main %>% pull(res_iast_tot), n=50)
+hist(sensi_isl %>% pull(res_iast_tot), n=50)
+
+
+sensi_all <- bind_rows(sensi_isl, sensi_main)
+
+ggplot(sensi_all, aes(x=type, y = res_iasa_tot))+
+  geom_violin() +
+  geom_boxplot(alpha = .5)
+t.test(res_iasa_tot~type, data = sensi_all)
+
+# remove all cells with sensitivity = 0
+ggplot(sensi_all %>% filter(SR_iasa_bmr_by_area>0), 
+       aes(x=type, y = res_iasa_tot))+
+  geom_violin() +
+  geom_boxplot(alpha = .5)
+t.test(res_iasa_tot~type, data = sensi_all %>% filter(SR_iasa_bmr_by_area>0))
+
+ggplot(sensi_all %>% filter(SR_iast_bmr_by_area>0), 
+       aes(x=type, y = res_iast_tot))+
+  geom_violin() +
+  geom_boxplot(alpha = .5)
+t.test(res_iast_tot~type, data = sensi_all%>% filter(SR_iast_bmr_by_area>0))
+
+
+
+
+rm(main, isl)
+expo_all <- bind_rows(expo_isl, expo_main)
+
+
+ggplot(expo_all, aes(x=type, y = expo_tot_norm))+
+  geom_violin() +
+  geom_boxplot(alpha = .5)
+ggplot(expo_all, aes(x=type, y = range_med))+
+  geom_violin() +
+  geom_boxplot(alpha = .5)
+
+
+t.test(expo_tot_norm~type, data = expo_all)
+
+
+
+
+
+####### Explore differences between taxa #######
+
+
+
+rm(main)
+
+ggplot()+ 
+  geom_smooth(data = sensi_isl %>% filter(y > -66.56333 & y < 66.56333 ), 
+              aes(x = y, y = res_iasa_tot, color = "island"))+ 
+  geom_smooth(data = sensi_main %>% filter(y > -66.56333 & y < 66.56333 ),
+              aes(x = y, y = res_iasa_tot, color = "mainland"))+
+  scale_colour_manual(name="Type",
+                      values=c(island="turquoise", mainland="firebrick"))+
+  coord_flip()+
   theme_classic()
 
+
+
+######### Brouillon account for number of species #########
 
 hist(sensi_fin %>% pull(SR_iasa_bmr), n=50)
 head(sensi_isl %>% filter(SR_tot_bmr>0 & SR_iasa_bmr>0) %>% arrange(SR_iasa_bmr))
