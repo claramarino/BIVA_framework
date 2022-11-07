@@ -103,9 +103,24 @@ pnat_tot <- ggplot(data = sensi_fin) +
   labs(title = "Total amniote species richness")+
   theme_map()
 
+# try residuals before normalization
+deg = "1"
+sensit_tbl <- readRDS(paste0("Output/Sensitivity/RISK_33_sensitivity_table_r", deg))
 
+summary(sensit_tbl)
+# correct all metrics by area 
+sensit_tbl_corr <- sensit_tbl %>%
+  mutate_at(vars(contains('SR_')), list(by_area=~.*100/area))
+head(sensit_tbl_corr %>% select(x,y,area, SR_tot_bmr, SR_tot_bmr_by_area))
+head(sensi_fin %>% select(x,y, SR_tot_bmr_by_area))
+# residuals before norm
+mod_ias_tot_prev <- lm(SR_iasa_bmr_by_area~SR_tot_bmr_by_area, data = sensit_tbl_corr)
+plot(mod_ias_tot_prev)
+summary(mod_ias_tot_prev)
+res_sensi_prev <- residuals.lm(mod_ias_tot_prev)
+
+# residuals after normalization
 mod_ias_tot <- lm(SR_iasa_bmr_by_area~SR_tot_bmr_by_area, data = sensi_fin)
-
 plot(mod_ias_tot)
 summary(mod_ias_tot)
 res_sensi <- residuals.lm(mod_ias_tot)
@@ -113,16 +128,81 @@ str(res_sensi)
 
 # normalité des résidus ?
 hist(res_sensi)
+hist(res_sensi_prev)
 
-sensi_fin = bind_cols(sensi_fin, data.frame(res_iasa_tot = res_sensi))
+res_df <- data.frame(res = res_sensi, res_prev = res_sensi_prev)
+ggplot(res_df, aes(x=res, y=res_prev))+
+  geom_point()+geom_smooth()+ geom_abline(slope=1, intercept = 0)
+
+sensi_fin = bind_cols(sensi_fin, data.frame(res_iasa_tot = res_sensi_prev))
 
 pres <- ggplot(data = sensi_fin) +
-  geom_tile(aes(x = x, y = y, fill = res_iasa_tot)) +
-  scale_fill_viridis_c()+
+  geom_tile(aes(x = x, y = y, fill = res_iasa_tot...5)) +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red")+
   labs(title = "(IAS-A ~ total SR) residuals")+
   theme_map()
 pres
 
+pres
+
+# birds only
+res_b_iasa_mod <- residuals.lm(
+  lm(SR_iasa_mod_b_by_area ~ SR_tot_b_by_area, data = sensi))
+
+sensi_bird <- sensi %>% 
+  select(x,y, contains("_b_"))%>%
+  mutate(res_iasa_b = res_b_iasa_mod)
+
+pres_b <- ggplot(data = sensi_bird) +
+  geom_tile(aes(x = x, y = y, fill = res_iasa_b)) +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red")+
+  labs(title = " birds (IAS-A ~ total SR) residuals")+
+  theme_map()
+pres_b
+
+# mammals only 
+
+res_m_iasa_mod <- residuals.lm(
+  lm(SR_iasa_mod_m_by_area ~ SR_tot_m_by_area, data = sensi))
+
+sensi_mam <- sensi %>% 
+  select(x,y, contains("_m_"))%>%
+  mutate(res_iasa_m = res_m_iasa_mod)
+
+pres_m <- ggplot(data = sensi_mam) +
+  geom_tile(aes(x = x, y = y, fill = res_iasa_m)) +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red")+
+  labs(title = " mam (IAS-A ~ total SR) residuals")+
+  theme_map()
+pres_m
+
+
+# reptiles only
+res_r_iasa_mod <- residuals.lm(
+  lm(SR_iasa_mod_r_by_area ~ SR_tot_r_by_area, data = sensi))
+
+sensi_rept <- sensi %>% 
+  select(x,y, contains("_r_"))%>%
+  mutate(res_iasa_r = res_r_iasa_mod)
+
+pres_r <- ggplot(data = sensi_rept) +
+  geom_tile(aes(x = x, y = y, fill = res_iasa_r)) +
+  scale_fill_gradient2(
+    low = "blue", mid = "white", high = "red")+
+  labs(title = " rept (IAS-A ~ total SR) residuals")+
+  theme_map()
+pres_r
+
+
+
+
+
+library(ggpubr)
+ggarrange(pnat_tot, pnat, pres, ncol = 2, nrow = 2, common.legend = T)
+ggarrange(pnat_tot, pnat, ncol = 2, common.legend = T)
 ggarrange(pnat_tot, pnat, pres, ncol = 2, nrow = 2, common.legend = T)
 
 
