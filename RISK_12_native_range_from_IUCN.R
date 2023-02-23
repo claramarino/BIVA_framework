@@ -121,6 +121,8 @@ for (sp in unique(rept_nat_range$binomial)){
 final_sp_list_IUCN <- c(final_sp_list_IUCN, unique(rept_nat_range$binomial))
 
 
+rm(rept_all, rept_nat_range, mam_nat_range)
+
 #### BIRDS ####
 
 # load native ranges from Birdlife
@@ -150,7 +152,7 @@ bird_nat_range <- bind_rows(b1_filt, b2_filt, b3_filt, b4_filt)
 # is there any missing sp?
 b_sp <- unique(bird_nat_range$binomial)
 b_iucn <- ias_in_iucn %>% filter(class=="AVES")
-setdiff(b_iucn$scientific_name, b_sp) # no !
+setdiff(b_iucn$scientific_name, b_sp) # yes
 
 
 for (sp in unique(bird_nat_range$binomial)){
@@ -212,15 +214,17 @@ plant_moll_sp <- ias_in_iucn %>%
 fish_sp <- ias_in_iucn %>% filter(class=="ACTINOPTERYGII") %>%
   pull(scientific_name)
 
+# add missing bird
+manual_sp <- c(plant_moll_sp, fish_sp, "Copsychus malabaricus")
 data_path <- "Z:/THESE/5_Data/Distribution_spatiale/3_IUCN_Manual_downloads_2022/"
 
-for (sp in c(plant_moll_sp, fish_sp)){
+for (sp in manual_sp){
   if (!dir.exists(paste0(data_path, sp))){ 
     dir.create(paste0(data_path, sp))
     }
 }
 
-sort(c(plant_moll_sp, fish_sp))
+sort(manual_sp)
 
 #######
 # TELECHARGEMENT A LA MAIN SUR IUCN WEB des range natifs des plantes
@@ -232,7 +236,7 @@ sort(c(plant_moll_sp, fish_sp))
 no_download <- c()
 sp_with_poly <- c()
 sp_with_point <- c()
-for(sp in c(fish_sp, plant_moll_sp)){
+for(sp in manual_sp){
   
   # detect empty folders => no_download group
   files = list.files(paste0(data_path, sp))
@@ -257,7 +261,7 @@ for(sp in c(fish_sp, plant_moll_sp)){
 }
 
 # on a bien toutes les plantes/fish ?
-setdiff(c(plant_moll_sp,fish_sp), c(sp_with_point, sp_with_poly, no_download)) # oui
+setdiff(manual_sp, c(sp_with_point, sp_with_poly, no_download)) # oui
 
 # only 9 plants with polygons, 1 arthro, 11 fish
 # for the rest, use native countries from IUCN

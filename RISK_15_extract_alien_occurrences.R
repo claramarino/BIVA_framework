@@ -27,7 +27,7 @@ out_path <- "Output/True_exposure_alien_species/"
 # out_files <- list.files(out_path)
 out_files <- character()
 
-##### 1. Native range from IUCN (n = 184 sp) ####
+##### 1. Native range from IUCN (n = 185 sp) ####
 
 # file list native ranges
 nat_path_iucn <- "Output/Native_exotic_range/Native_IUCN/"
@@ -88,7 +88,7 @@ for (k in sp_key_nat_range_iucn){
       filter(is.na(control)) %>%
       mutate(new_key = k, 
              new_species = unique(sp_info$new_species[sp_info$new_key==k])) %>%
-      select(new_species, new_key, countryCode, geometry)
+      select(new_species, new_key, countryCode, coordinateUncertaintyInMeters, geometry)
     
     # plot(occ_out_nat %>% select(new_species))
     # plot(occ_out_nat_buff %>% select(new_species))
@@ -163,7 +163,7 @@ for (k in sp_key_nat_range_other){
       filter(is.na(control)) %>%
       mutate(new_key = k, 
              new_species = unique(sp_info$new_species[sp_info$new_key==k])) %>%
-      select(new_species, new_key, countryCode, geometry)
+      select(new_species, new_key, countryCode, coordinateUncertaintyInMeters, geometry)
     
     # save in final data for next analysis
     # some species might have no record outside native range
@@ -222,7 +222,7 @@ for (k in sp_key_nat_countries){
         crs = "+proj=longlat +datum=WGS84",
         stringsAsFactors = FALSE,
         remove = TRUE) %>%
-      select(new_species, new_key, countryCode, geometry)
+      select(new_species, new_key, countryCode, coordinateUncertaintyInMeters, geometry)
     
     # save in final data for next analysis
     # some species might have no record outside native range
@@ -280,7 +280,7 @@ for (k in sp_key_exo_countries){
         crs = "+proj=longlat +datum=WGS84",
         stringsAsFactors = FALSE,
         remove = TRUE) %>%
-      select(new_species, new_key, countryCode, geometry)
+      select(new_species, new_key, countryCode, coordinateUncertaintyInMeters, geometry)
 
     
     # save in final data for next analysis

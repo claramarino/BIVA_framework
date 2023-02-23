@@ -42,6 +42,67 @@ extract_cells_pts <- function(pts, rast){
   return(df)
 }
 
+plot(st_make_grid(what = "centers"), axes = TRUE)
+plot(st_make_grid(what = "centers"), axes = TRUE)
+plot(st_make_grid(what = "corners"), add = TRUE, col = 'green', pch=3)
+sfc = st_sfc(st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,0)))))
+plot(st_make_grid(sfc, cellsize = .1, square = FALSE))
+plot(sfc, add = TRUE)
+
+
+# Create equal area cell grid
+
+
+# Using Berhmann's cylindrical equal-area projection
+cea<-"+proj=cea +lon_0=0 +lat_ts=30 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs" # cylindrical equal area projection
+
+
+
+
+world <- rnaturalearth::countries110
+crs(world)
+world <- sp::spTransform(world, cea)
+# Convert SpatialPolygonsDataframe into sf objects with CEA projection
+study_area_sf <- sf::st_transform(sf::st_as_sf(world), crs=cea)
+
+# create grid cells 110 km
+grid_110km = st_make_grid(
+  x= study_area_sf, cellsize = 110000, what = "polygons", square = F) %>%
+  st_sf() 
+grid_110km = grid_110km %>%
+  mutate(grid_id = 1:nrow(grid_110km)) # add grid ID
+
+# compare projections (make sure both have the same projection)
+raster::compareCRS(study_area_sf, grid_110km)
+
+ggplot()+
+  geom_sf(data = study_area_sf, fill = "red") +
+  geom_sf(data = grid_110km, fill=NA)
+
+# create grid cells 55 km
+grid_55km = st_make_grid(
+  x= study_area_sf, cellsize = 55000, what = "polygons", square = F) %>%
+  st_sf() 
+grid_55km = grid_55km %>%
+  mutate(grid_id = 1:nrow(grid_55km)) # add grid ID
+
+raster::compareCRS(study_area_sf, grid_110km, grid_55km)
+
+# Transform coordinates of simple feature
+points_sf <- sf::st_transform(sf::st_as_sf(points), crs=cea) # certify that data is in the same projection
+
+
+
+raster::compareCRS(grid_55km, points_sf)
+
+
+# count number of points in each grid
+# https://gis.stackexchange.com/questions/323698/counting-points-in-polygons-with-sf-package-of-r
+grid_sf$n_colli = lengths(st_intersects(honeycomb_grid_sf, test_points))
+
+# remove grid without value of 0 (i.e. no points in side that grid)
+honeycomb_count = filter(honeycomb_grid_sf, n_colli > 0)
+
 
 # initialize raster grid
 # resolution 0.1

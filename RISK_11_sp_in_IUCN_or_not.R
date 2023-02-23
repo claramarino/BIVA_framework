@@ -15,39 +15,39 @@ sp_unique <- tolower(unique(all_ias_with_occ$new_species))
 # check for synonyms first
 # then retrieve iucn information
 
-# syno_ias <- data.frame()
-# for (i in 1:length(sp_unique)){
-#   obj <- rl_synonyms(sp_unique[i],
-#                      key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
-#   syno_ias <- bind_rows(syno_ias, obj$result)
-#   saveRDS(syno_ias,"Output/Synonyms/RISK_11_IUCN_synonyms_ias_from_gbif")
-# }
+syno_ias <- data.frame()
+for (i in 1:length(sp_unique)){
+  obj <- rl_synonyms(sp_unique[i],
+                     key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+  syno_ias <- bind_rows(syno_ias, obj$result)
+  saveRDS(syno_ias,"Output/Synonyms/RISK_11_IUCN_synonyms_ias_from_gbif")
+}
 
 syno_ias <- readRDS("Output/Synonyms/RISK_11_IUCN_synonyms_ias_from_gbif") %>% 
   distinct(accepted_name, synonym) %>%
   mutate_all(tolower)
 
-# iucn_search_ias <- data.frame()
-# for (i in 1:length(sp_unique)){
-#   obj <- rl_search(sp_unique[i],
-#                      key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
-#   if(is.null(obj$result)){
-#     acc_name = syno_ias$accepted_name[syno_ias$synonym==sp_unique[i]]
-#     if(length(acc_name)==0){ next }
-#     obj_acc <- data.frame()
-#     for (j in length(acc_name)){
-#       obj2 <- rl_search(acc_name[j],
-#                        key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
-#       obj2$result$ias_name = sp_unique[i]
-#       obj_acc <- bind_rows(obj_acc, obj2$result)
-#     }
-#     iucn_search_ias <- bind_rows(iucn_search_ias, obj_acc)
-#   } else {
-#     obj$result$ias_name = sp_unique[i]
-#     iucn_search_ias <- bind_rows(iucn_search_ias, obj$result)
-#   }
-#   saveRDS(iucn_search_ias,"Output/Native_exotic_range/RISK_11_IAS_sp_in_IUCN")
-# }
+iucn_search_ias <- data.frame()
+for (i in 1:length(sp_unique)){
+  obj <- rl_search(sp_unique[i],
+                     key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+  if(is.null(obj$result)){
+    acc_name = syno_ias$accepted_name[syno_ias$synonym==sp_unique[i]]
+    if(length(acc_name)==0){ next }
+    obj_acc <- data.frame()
+    for (j in length(acc_name)){
+      obj2 <- rl_search(acc_name[j],
+                       key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+      obj2$result$ias_name = sp_unique[i]
+      obj_acc <- bind_rows(obj_acc, obj2$result)
+    }
+    iucn_search_ias <- bind_rows(iucn_search_ias, obj_acc)
+  } else {
+    obj$result$ias_name = sp_unique[i]
+    iucn_search_ias <- bind_rows(iucn_search_ias, obj$result)
+  }
+  saveRDS(iucn_search_ias,"Output/Native_exotic_range/RISK_11_IAS_sp_in_IUCN")
+}
 
 iucn_search_ias <- readRDS("Output/Native_exotic_range/RISK_11_IAS_sp_in_IUCN") 
 

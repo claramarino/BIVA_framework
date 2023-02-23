@@ -79,31 +79,25 @@ saveRDS(b3_filt, paste0(out_fold, "/RISK_32_Polygon_nat_all_BIRD3"))
 saveRDS(b4_filt, paste0(out_fold, "/RISK_32_Polygon_nat_all_BIRD4"))
 
 
-#### Extract overlapping cells from raster ####
+#### Extract overlapping cells from grid ####
 
 # path for loading polygons
 path_poly = "~/predict_vulnerability/Polygons_native_all_bmr/"
 
-# define raster
-# high resolution for keeping most islands
-# initialize raster grids
-# resolution 0.1
-raster0.1 <- raster(nrows=180, ncols=360, xmn=-180, xmx=180, ymn=-90, ymx=90,
-                    crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0",
-                    resolution = 0.1, vals=NULL)
-raster0.1[] <- 0
-# resolution 1
-raster1 <- raster(nrows=180, ncols=360, xmn=-180, xmx=180, ymn=-90, ymx=90,
-                  crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0",
-                  resolution = 1, vals=NULL)
-raster1[] <- 0
+# define grids
 
 
 # world map to filter out oceanic ranges
-worldMap <- ne_countries(scale = "large", type = "countries", returnclass = "sf")
-# filter directly rasters
-raster0.1 <- mask(raster0.1, worldMap)
-raster1 <- mask(raster1, worldMap)
+path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
+
+land_water1 <- raster(paste0(path_data, "Human_modification/",
+                             "gHM_landLakeReservoirOcean300m-0000000000-0000000000.tif"))
+
+land_water2 <- raster(paste0(path_data, "Human_modification/",
+                             "gHM_landLakeReservoirOcean300m-0000000000-0000065536.tif"))
+
+land_water3 <- raster(paste0(path_data, "Human_modification/",
+                             "gHM_landLakeReservoirOcean300m-0000000000-0000131072.tif"))
 
 
 # define extract_cells function ----------

@@ -13,7 +13,7 @@ library(ggcorrplot)
 
 ## load alien occurrences
 # for the moment, DASCO
-occ_dasco <- readRDS("Output/focus_ias_range/01_ias129_occ_dasco_alien_range")
+occ_dasco <- readRDS("Output/zOld/focus_ias_range/01_ias129_occ_dasco_alien_range")
 
 
 ## load alien attributes

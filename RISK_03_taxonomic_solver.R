@@ -152,7 +152,7 @@ for (l in 1:nrow(all_sp_clean)){
 length(list.files("Output/Occurrences_clean_taxo_ok/", full.names = T))
 length(unique(all_sp_clean$new_key))
 
-# 327 unique IAS with GBIF occurrences
+# 328 unique IAS with GBIF occurrences
 
 # save species list
 
