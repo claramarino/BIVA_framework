@@ -47,6 +47,8 @@ grid_55km = st_make_grid(
 grid_55km = grid_55km %>%
   mutate(grid_id = 1:nrow(grid_55km)) # add grid ID
 
+range(grid_55km$grid_id)
+
 raster::compareCRS(grid_110km, grid_55km)
 
 ##### Define function for extraction
@@ -92,26 +94,26 @@ for (i in 1:length(occ_files)){
   occ_sp <- readRDS(paste0(occ_path, occ_files[i]))
   
   occ_sp_55 <- occ_sp %>% dplyr::filter(coordinateUncertaintyInMeters < 22500)
-  occ_sp_110 <- occ_sp %>% dplyr::filter(coordinateUncertaintyInMeters < 55000)
+  # occ_sp_110 <- occ_sp %>% dplyr::filter(coordinateUncertaintyInMeters < 55000)
   
   # extract cells
   df_sp_55 <- extract_cells_pts(occ_sp_55, grid_55km) # resolution = 55km x 55km (0.5 deg)
-  df_sp_110 <- extract_cells_pts(occ_sp_110, grid_110km) # resolution = 110km x 110km (1 deg)
-  df_sp_110_nofilter <- extract_cells_pts(occ_sp, grid_110km) # resolution = 110km x 110km (1 deg)
-  
+  # df_sp_110 <- extract_cells_pts(occ_sp_110, grid_110km) # resolution = 110km x 110km (1 deg)
+  # df_sp_110_nofilter <- extract_cells_pts(occ_sp, grid_110km) # resolution = 110km x 110km (1 deg)
+  # 
   # save cells in dataframes
   all_sp_cells_55 <- bind_rows(all_sp_cells_55, df_sp_55)
   saveRDS(all_sp_cells_55, paste0(out_fold, "RISK_21_grid_cells_310_IAS_55km"))
-  # save cells in list
-  all_sp_cells_110 <- bind_rows(all_sp_cells_110, df_sp_110)
-  saveRDS(all_sp_cells_110, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km"))
-  # save cells in list
-  all_sp_cells_110_nofilter <- bind_rows(all_sp_cells_110_nofilter, df_sp_110_nofilter)
-  saveRDS(all_sp_cells_110_nofilter, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km_nofilter"))
+  # # save cells in list
+  # all_sp_cells_110 <- bind_rows(all_sp_cells_110, df_sp_110)
+  # saveRDS(all_sp_cells_110, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km"))
+  # # save cells in list
+  # all_sp_cells_110_nofilter <- bind_rows(all_sp_cells_110_nofilter, df_sp_110_nofilter)
+  # saveRDS(all_sp_cells_110_nofilter, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km_nofilter"))
   
 }
-
-
+st_bbox(grid_110km)
+st_bbox(grid_55km)
 
 #### Explore results ####
 
@@ -119,9 +121,11 @@ for (i in 1:length(occ_files)){
 out_fold = "Output/Exposure/Exposure_raw/"
 
 # df_all <- readRDS(paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km_nofilter"))
-df_all <- readRDS(paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km"))
-# df_all <- readRDS(paste0(out_fold, "RISK_21_grid_cells_310_IAS_55km"))
+# df_all <- readRDS(paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km"))
+df_all <- readRDS(paste0(out_fold, "RISK_21_grid_cells_310_IAS_55km"))
 
+range(grid_55km$grid_id)
+range(df_all$grid_id)
 
 
 # for each ias, calculate max range
@@ -226,9 +230,9 @@ ggcorrplot(cormat)
 cea<-"+proj=cea +lon_0=0 +lat_ts=30 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
 
 # load worldmap for spatial extent 
-world <- rnaturalearth::ne_coastline(returnclass = "sf")
-study_area_sf <- sf::st_transform(world, crs=cea)
-
+world <- rnaturalearth::countries110
+# Convert into sf objects with CEA projection
+study_area_sf <- sf::st_transform(sf::st_as_sf(world), crs=cea)
 # create grid cells 110 km
 grid_110km = st_make_grid(
   x= study_area_sf, cellsize = 110000, what = "polygons", square = F) %>%
@@ -236,23 +240,23 @@ grid_110km = st_make_grid(
 grid_110km = grid_110km %>%
   mutate(grid_id = 1:nrow(grid_110km))
 
-# create grid cells 55 km
 grid_55km = st_make_grid(
   x= study_area_sf, cellsize = 55000, what = "polygons", square = F) %>%
   st_sf() 
 grid_55km = grid_55km %>%
-  mutate(grid_id = 1:nrow(grid_55km))
-crs(grid_55km)
+  mutate(grid_id = 1:nrow(grid_55km)) # add grid ID
+
+range(grid_55km$grid_id)
 
 ias_agg_grid110 <- st_as_sf(left_join(ias_all_agg, grid_110km))
 ias_agg_grid55 <- st_as_sf(left_join(ias_all_agg, grid_55km))
 
 
 # plot species richness
-SR_ias<- ggplot(data = ias_agg_grid110) +
+SR_ias<- ggplot(data = ias_agg_grid55) +
   geom_sf(aes(fill = SR_tot), color = NA) +
   scale_fill_viridis_c(option="magma", direction = -1) +
-  geom_sf(data = study_area_sf, alpha = 0.1, fill = NA) +
+  geom_sf(data = study_area_sf, fill = NA, color = "grey70") +
   theme_classic() +
   labs(title = "Species richness of the target IAS",
        subtitle = paste0("Total number of IAS with at least one pixel: ",
