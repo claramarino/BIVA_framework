@@ -4,6 +4,7 @@ library(readxl)
 library(downloader)
 library(terra)
 library(raster)
+library(tidyverse)
 
 # file path
 sdm_path <- "Z:/R/sdmrisk/"
@@ -134,7 +135,6 @@ df_all <- readRDS(paste0(fold, "RISK_21_grid_cells_310_IAS_55km"))
 sp_info <- readRDS("Output/Native_exotic_range/RISK_14_ias_list_with_occ_ALL_DB_nat_exo")
 gbif_taxo_2 <- readRDS("Output/Taxonomy/RISK_01_taxo_gbif_2")
 
-library(tidyverse)
 
 info <- left_join(sp_info, gbif_taxo_2) %>% 
   dplyr::select(new_key:freshwater, kingdom:order,class) %>%
@@ -276,185 +276,77 @@ range(na.omit(grid_sr$SR_fish_invert))
 
 # same resolution as climate
 chelsa <- rast("Z:/R/sdmrisk/data/raw/bioclim/CHELSA_baseline_bio01.tif")
-chelsa_10km <- terra::aggregate(chelsa, fact = 10)
-chelsa_10km
+chelsa_50km <- terra::aggregate(chelsa, fact = 50)
+chelsa_50km
 
 # transform polygons in the adequate crs
-grid_sr_84 <- sf::st_transform(grid_sr, crs=crs(chelsa_10km)) %>%
+grid_sr_84 <- sf::st_transform(grid_sr, crs=crs(chelsa_50km)) %>%
   mutate(area = st_area(geometry))
 st_bbox(grid_sr)
 st_bbox(grid_sr_84)
 st_geometry(grid_sr_84)
 
-ggplot(grid_sr_84)+
-  geom_sf(aes(fill = as.numeric(area)), color=NA)+
+ggplot(grid_sr_84 %>% filter(!(grid_id %in% c(210, 195498, 195343))))+
+  geom_sf(aes(fill = grid_id), color=NA)+
   ggtitle("le pont du monde")
+# remove the first and last cells that cause trouble for the rasterization
 
-sr_v <- normalize.longitude(vect(grid_sr_84))
+sr_v <- normalize.longitude(vect(grid_sr_84 %>% filter(!(grid_id %in% c(210, 195498, 195343)))))
+terra::ext(sr_v)
+ext(grid_sr_84)
 crs(sr_v)
-crs(chelsa_10km)
+crs(chelsa_50km)
 
 r_c <- c(
-  terra::rasterize(sr_v, chelsa_10km, field = "SR_tot", fun="sum"),
-  terra::rasterize(sr_v, chelsa_10km, field = "SR_tot_vert_terr", fun="sum"),
-  terra::rasterize(sr_v, chelsa_10km, field = "SR_tot_plant", fun="sum"),
-  terra::rasterize(sr_v, chelsa_10km, field = "SR_fish_invert", fun="sum"))
+  terra::rasterize(sr_v, chelsa_50km, field = "SR_tot", fun="mean"),
+  terra::rasterize(sr_v, chelsa_50km, field = "SR_tot_vert_terr", fun="mean"),
+  terra::rasterize(sr_v, chelsa_50km, field = "SR_tot_plant", fun="mean"),
+  terra::rasterize(sr_v, chelsa_50km, field = "SR_fish_invert", fun="mean"))
 
 r_c
-plot(r_c)
+plot(r_c[["SR_tot"]])
+
+# save output raster
+file_r_c <- paste0(sdm_path, "data/output/tg/target_group_55km_", names(r_c), ".tif")
+writeRaster(r_c, file_r_c, overwrite=TRUE)
+
+# save taxonomic group info 
+info_ok <- info %>% mutate(group = case_when(
+  kingdom=="Plantae" ~ "plant",
+  phylum %in% c("Arthropoda", "Mollusca","Ctenophora") ~ "invert_fish",
+  phylum == "Chordata" & class == "Actinopterygii" ~ "invert_fish",
+  phylum == "Chordata" & class != "Actinopterygii" ~ "vert_terr"
+))
+table(info_ok$group)
+
+saveRDS(info_ok, 
+        paste0(sdm_path, "data/output/tg/target_group_info"))
 
 
+##### check population & road #####
+
+road <- terra::rast(paste0(
+  sdm_path, 
+  "data/raw/roads/",
+  "grip4_total_dens_m_km2.asc"))
+
+road
+plot(road)
+
+# log transform
+road_log <- log(road + 1)
+plot(road_log)
 
 
+pop <- terra::rast(paste0(
+  sdm_path, 
+  "data/raw/pop/",
+  "gpw_v4_population_count_rev11_2015_2pt5_min.tif"))
+pop
 
+plot(pop)
 
-
-
-
-############################## BROUILLON ##############################"
-
-lu <- data.frame(
-  ID = c(0,111,113,112,114,115,116,121,123,122,124,125,126,20,30,90,100,60,40,50,70,80,200),
-  landcover = c("NA", "forest_closed","forest_closed","forest_closed","forest_closed",
-                "forest_closed", "forest_closed", "forest_open", "forest_open", 
-                "forest_open", "forest_open", "forest_open", "forest_open",
-                "shrubs","grass", "wetland","moss_lichen","bare","crop",
-                "built","snow_ice","water_perm", "sea"), 
-  code = c("NA","forest","forest","forest","forest","forest","forest",
-           "forest","forest","forest","forest","forest","forest",
-           "shrubs","grass", "water","moss_lichen","bare","crop",
-           "built","snow_ice","water", "sea"))
-
-
-levels(lu_cate1) <- lu
-lu_cate1
-# save forest 2.5
-plot(forest)
-
-forest
-
-sum(is.na(forest))
-
-cellStats(forest)
-
-
-#lu_catef1 <- ratify(lu_cate1)
-
-levels(lu_cate1) <- lu
-is.factor(lu_cate1)
-values(lu_cate1)[1:100]
-
-levels(lu_cate1)
-attributes(lu_cate1)
-
-
-
-r <- round(r)
-f <- as.factor(r)
-is.factor(f)
-summary(f)
-
-names(lu_cate1) 
-# aggregate 
-
-forest_1 <- lu_cate1
-forest_1[forest_1[] == "" ] = NA
-
-
-r <- raster(nrow=10, ncol=10)
-values(r) <- runif(ncell(r)) * 10
-is.factor(r)
-
-r <- round(r)
-f <- as.factor(r)
-is.factor(f)
-
-x <- levels(f)[[1]]
-x
-x$code <- letters[10:20]
-levels(f) <- x
-levels(f)
-f
-
-r <- raster(nrow=10, ncol=10)
-values(r) = 1
-r[51:100] = 2
-r[3:6, 1:5] = 3
-r <- ratify(r)
-
-rat <- levels(r)[[1]]
-rat$landcover <- c("Pine", "Oak", "Meadow")
-rat$code <- c(12,25,30)
-levels(r) <- rat
-r
-
-# extract values for some cells
-i <- extract(r, c(1,2, 25,100))
-i
-# get the attribute values for these cells
-factorValues(r, i)
-
-# write to file:
-# rr <- writeRaster(r, rasterTmpFile(), overwrite=TRUE)
-# rr
-
-# create a single-layer factor 
-x <- deratify(r, "landcover")
-x
-is.factor(x)
-levels(x)
-
-
-
-
-
-
-##### Other datasets #####
-
-# Aggregate chelsa to 10km to rasterize ports & airports
-chelsa <- raster("Z:/R/sdmrisk/data/raw/bioclim/CHELSA_baseline_bio01.tif")
-chelsa_10km <- raster::aggregate(chelsa, 
-                                 fact = 10)
-
-# Roads (motorways)
-library(sf)
-roads <- st_read("./data/raw/roads/GRIP4_GlobalRoads.gdb")
-roads <- roads[roads$GP_RTP == 1, ]
-
-
-saveRDS(dist_roads, "./data/output/distance_roads.RDS")
-
-saveRDS(roads, "./data/output/motorways_sf.RDS")
-raster_roads <- rasterize(roads[0],
-                          chelsa_10km,
-                          fun = 'count')
-seq_test <- round(seq(1, 573396, length = 11))
-for(i in 1:10)
-{
-  cat(paste0(Sys.time(), " -- iteration ", i, "\n"))
-  raster_roads_test <- rasterize(roads[seq_test[i:(i + 1)]][0],
-                                 chelsa_10km,
-                                 fun = function(x, ...) 1)
-  png(paste0("./data/raw/roads/roads_rasterized_part", i, ".png", h = 1080, w = 1920))
-  plot(raster_roads_test)
-  dev.off()
-}
-
-
-chelsa_100km <- aggregate(chelsa_10km, fact = 10)
-
-a <- roads[1:100, ]
-
-raster_roads_test <- rasterize(roads[1],
-                               chelsa_10km,
-                               fun = sum)
-
-raster_roads2 <- raster_roads_test
-raster_roads2[raster_roads2 > 1] <- 1
-plot(raster_roads2)
-
-dist_roads <- distance(raster_roads2)
-saveRDS(dist_airports,
-        "./data/output/distance_to_airports.RDS")
+pop_log <- log(pop+1)
+plot(pop_log)
 
 
