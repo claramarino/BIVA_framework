@@ -19,14 +19,14 @@ baseline = rast(paste0(sdm_path, "data/output/baseline_scale_moll.tif"))
 var <- readRDS(paste0(sdm_path, "data/output/var_names.RDS"))
 names(baseline) <- var
 sp_info <- readRDS(paste0(sdm_path, "data/sp_list_to_model.RDS"))
-bg_points <- readRDS(paste0(sdm_path, "data/bg_points.RDS"))
+bg_points <- readRDS(paste0(sdm_path, "data/bg_points_bias.RDS"))
 groups <- readRDS(paste0(sdm_path, "data/collinearity_groups.RDS"))
 
 
 ##### Select models
 
-models = c("GLM", "GBM", "GAM", "MARS", "MAXENT")
-models = c("GLM", "GBM")
+#models = c("GLM", "GBM", "GAM", "MARS", "MAXENT")
+models = c("GLM", "GBM", "GAM", "MAXENT")
 
 ##### calibrate background points 
 
@@ -34,7 +34,8 @@ bg_cells <-   cellFromXY(baseline,
                          bg_points)
 bg_data <- as.data.frame(bg_points)
 bg_data$Observed <- 0
-
+plot(bg_data$x, bg_data$y)
+dev.off()
 
 ##### Select one var per intercorrelated group
 
@@ -45,11 +46,11 @@ bg_data$Observed <- 0
 
 # On met dans un objet tous les groupes qui ont plusieurs variables
 sel_groups <- groups[which(sapply(groups, length) > 1)]
-
+sel_groups
 # On prépare un tableau qui va contenir les variables sélectionnées pour chaque groupe
 # on ne fait la sélection que sur les espèces avec assez de données
 # voir ce qu'on fait ensuite pour les autres ?
-kept_vars <- data.frame(species = sp_info$sp_key[which(sp_info$occ_qty == "Sufficient")])
+kept_vars <- data.frame(species = sp_info$sp_key[which(sp_info$occ_qty != "Insufficient")])
 
 kept_vars$group1 <- "bio6"
 kept_vars$group2 <- "bio4"
@@ -82,9 +83,9 @@ saveRDS(vars_per_sp, file = paste0(sdm_path, "data/vars_per_sp.RDS"))
 vars_per_sp <- readRDS(paste0(sdm_path, "data/vars_per_sp.RDS"))
 
 
-for (sp in vars_per_sp$species)
-{
-  sp = "9613389"
+for (sp in vars_per_sp$species[41:50]){
+  # sp = "1311649"
+  sp_ok = paste0("sp", sp)
   
   # Load sp occurrences
   sp_occ <- readRDS(paste0(sdm_path, "data/occ_rast/occ_spk_", sp))  
@@ -96,11 +97,6 @@ for (sp in vars_per_sp$species)
   # 1. Biomod2 doit-il générer des pseudoabsences ?
   # Non on a des points de bg
   
-  runs_PA <- 2
-  nb_PA <- 30000
-  runs_CV <- 2
-  
-  
   runs_PA <- 0
   nb_PA <- 0
   runs_CV <- 2
@@ -111,18 +107,18 @@ for (sp in vars_per_sp$species)
   species_cells <- cellFromXY(baseline,
                               sp_occ[, c("x", "y")])
   
-  if(any(bg_cells %in% species_cells)){
-    bg_safe <- bg_data[-which(bg_cells %in% species_cells), ]
-  } else {
-    bg_safe <- bg_data
-  }
-  
-  # nombre de cell pour chaque condition
-  prNum <- nrow(sp_occ) # number of presences
-  bgNum <- nrow(bg_safe) # number of backgrounds
+  # if(any(bg_cells %in% species_cells)){
+  #   bg_safe <- bg_data[-which(bg_cells %in% species_cells), ]
+  # } else {
+  #   bg_safe <- bg_data
+  # }
+  # 
+  # # nombre de cell pour chaque condition
+  # prNum <- nrow(sp_occ) # number of presences
+  # bgNum <- nrow(bg_safe) # number of backgrounds
 
   # final points to consider: bind presence and background
-  F_points <- bind_rows(sp_occ, bg_safe)
+  F_points <- bind_rows(sp_occ, bg_data)
   
   # 3. adequate occurrence format for biomod2
   
@@ -130,8 +126,8 @@ for (sp in vars_per_sp$species)
   P_points <- F_points[, "Observed"]
   
   
-  if(!dir.exists(paste0(sdm_path, "var_selection/all_vars/", sp))){
-    dir.create(paste0(sdm_path, "var_selection/all_vars/", sp), recursive = T)
+  if(!dir.exists(paste0(sdm_path, "var_selection/all_vars/", sp_ok))){
+    dir.create(paste0(sdm_path, "var_selection/all_vars/", sp_ok), recursive = T)
   }
   # setwd(paste0(initial_wd, "/var_selection/all_vars/", sp))
   # 
@@ -140,7 +136,7 @@ for (sp in vars_per_sp$species)
     sample(names(sp_env_stack), 
            nlyr(sp_env_stack))]]
 
-  run_data <- BIOMOD_FormatingData(resp.name = sp,
+  run_data <- BIOMOD_FormatingData(resp.name = sp_ok,
                                    resp.var = P_points, 
                                    expl.var = MyExpl, 
                                    dir.name = paste0(sdm_path, "var_selection/all_vars"),
@@ -149,7 +145,7 @@ for (sp in vars_per_sp$species)
                                    PA.nb.absences = nb_PA,
                                    PA.strategy = 'random')
   
-  saveRDS(run_data, file = paste0(sdm_path, "var_selection/all_vars/", sp, "/run_data.RDS"))
+  saveRDS(run_data, file = paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/run_data.RDS"))
   
   myBiomodOptions <- BIOMOD_ModelingOptions()
   
@@ -166,12 +162,11 @@ for (sp in vars_per_sp$species)
                                 nb.cpu = 4, 
                                 do.progress = TRUE)
   
-  saveRDS(model_runs, file = paste0(sdm_path, "var_selection/all_vars/", sp, "/model_runs.RDS"))
-  
+  saveRDS(model_runs, file = paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/model_runs.RDS"))
+  print(Sys.time())
 }
 
 
-sessionInfo()
 
 
 
@@ -182,7 +177,10 @@ for (i in 1:length(sp_list$sp))
 {
   sp <- sp_list$sp[i]
   
-  model_runs <- readRDS(paste0("var_selection/all_vars/", sp, "/model_runs.RDS"))
+  sp = "9613389"
+  sp_ok = paste0("sp", sp)
+  
+  model_runs <- readRDS(paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/model_runs.RDS"))
   
   gg_varimp <- get_variables_importance(model_runs)
   
@@ -205,7 +203,7 @@ for (i in 1:length(sp_list$sp))
   
   
   
-  png(paste0("graphiques/variable_importance_", sp, ".png"))
+  png(paste0(sdm_path, "graphs/variable_importance_", sp_ok, ".png"))
   print(p)
   dev.off()
   
@@ -218,7 +216,7 @@ for (i in 1:length(sp_list$sp))
   # Evaluation des interactions entre variables
   var_interactions <- spread(gg_varimp, Variable, Variable.importance)
   
-  png(paste0("graphiques/variable_interactions_", sp, ".png"),
+  png(paste0(sdm_path, "graphs/variable_interactions_", sp_ok, ".png"),
       width = 900, height = 900)
   corPlot(var_interactions[, -c(1:5)], method = "pearson")
   dev.off()  

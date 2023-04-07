@@ -63,8 +63,8 @@ plot(pop50, col = c("#E34A33", "#B30000"))
 
 # target group
 
-tg_names <- c("SR_tot_plant", "SR_tot_vert_terr", "SR_fish_invert")
-tg_new <- c("plant","terr_vert","invert_fish")
+tg_names <- c("SR_tot_plant", "SR_tot_vert_terr", "SR_fish_invert", "SR_tot.tif")
+tg_new <- c("plant","terr_vert","invert_fish", "all_exo_occ")
 files_tg <- c()
 for (tg in tg_names){
   files <- list.files(paste0(sdm_path, "data/output/tg/"), full.names = T)
@@ -72,6 +72,7 @@ for (tg in tg_names){
 }
 
 tg.stack <- terra::rast(files_tg)
+tg.stack
 names(tg.stack) <- tg_new
 
 tg.stack[is.na(tg.stack)] <- 0
@@ -97,7 +98,7 @@ writeRaster(env.stack,
 library(virtualspecies)
 env.stack <- stack(
   rast(paste0(sdm_path, "data/output/baseline_envt_stack_50km.tif")))
-plot(env.stack[["plant"]])
+plot(env.stack[["all_exo_occ"]])
 
 var <- names(env.stack)
 saveRDS(var, paste0(sdm_path, "data/output/var_names.RDS"))

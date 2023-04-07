@@ -20,7 +20,7 @@ var <- readRDS(paste0(sdm_path, "data/output/var_names.RDS"))
 names(baseline) <- var
 sp_info <- readRDS(paste0(sdm_path, "data/occ_rast/info_occ_all_sp"))
 
-plot(baseline[[1]])
+plot(baseline[["all_exo_occ"]])
 
 ##### remove collinear var
 
@@ -37,7 +37,7 @@ collinearity_groups
 var_interest <- c(
   "bio6", "bio2","bio4","bio5","bio8","bio16","bio15","bio19", 
   "bare","pop","forest","grass","moss_lichen","shrubs","water",
-  "invert_fish","plant","terr_vert"
+  "all_exo_occ"
 )
 
 
@@ -52,18 +52,48 @@ testblocks <-  cv_spatial_autocor(
 minblocksize <- min(testblocks$range_table$range)
 medianblocksize <- median(testblocks$range_table$range)
 
-
+# sample des points de bg
+# without bias
 bg_points <- dismo::randomPoints(baseline,
                                  n = 30000)
 
-saveRDS(bg_points,paste0(sdm_path, "data/bg_points.RDS"))
+# OR WITH BIAS as Barber et al DDI 
+# following the target group bias in occurrences
+bg_points <- dismo::randomPoints(baseline,
+                                 n = 30000)
 
 
-bg_data <- sf::st_as_sf(data.frame(bg_points),
+
+bias <- baseline[["all_exo_occ"]]
+minValue(bias)
+maxValue(bias)
+
+bias <- bias+abs(minValue(bias))
+minValue(bias)
+
+# Normalize bias file between 0 and 1.
+library(spatialEco)
+bias <- raster.transformation(rast(bias), trans="norm")
+minValue(raster(bias))
+maxValue(raster(bias))
+
+plot(bias)
+
+bg_points_bias <- dismo::randomPoints(raster(bias),
+                                      n = 9000, prob = T)
+
+
+
+saveRDS(bg_points_bias,paste0(sdm_path, "data/bg_points_bias.RDS"))
+
+
+bg_data <- sf::st_as_sf(data.frame(bg_points_bias),
                         coords = c("x", "y"),
                         crs = raster::crs(baseline))
 bg_data$Observed <- 0
 plot(bg_data, pch=".")
+
+
 
 # Choisir le nombre de folds de cross-validation
 nb.of.folds = 3
