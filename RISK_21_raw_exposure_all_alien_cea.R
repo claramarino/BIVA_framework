@@ -18,38 +18,13 @@ sp_info <- readRDS("Output/Native_exotic_range/RISK_14_ias_list_with_occ_ALL_DB_
 
 ##### Create equal area cell grid
 
-# Using Berhmann's cylindrical equal-area projection (CEA)
-cea<-"+proj=cea +lon_0=0 +lat_ts=30 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+# Using Mollweide equal-area projection as for SDMs
+moll <- crs("+proj=moll")
+moll
 
-# load worldmap for spatial extent 
-world <- rnaturalearth::countries110
-# Convert into sf objects with CEA projection
-study_area_sf <- sf::st_transform(sf::st_as_sf(world), crs=cea)
-
-# create grid cells 110 km
-grid_110km = st_make_grid(
-  x= study_area_sf, cellsize = 110000, what = "polygons", square = F) %>%
-  st_sf() 
-grid_110km = grid_110km %>%
-  mutate(grid_id = 1:nrow(grid_110km)) # add grid ID
-
-# compare projections (make sure both have the same projection)
-raster::compareCRS(study_area_sf, grid_110km)
-
-ggplot()+
-  geom_sf(data = study_area_sf, fill = "red") +
-  geom_sf(data = grid_110km, fill=NA)
-
-# create grid cells 55 km
-grid_55km = st_make_grid(
-  x= study_area_sf, cellsize = 55000, what = "polygons", square = F) %>%
-  st_sf() 
-grid_55km = grid_55km %>%
-  mutate(grid_id = 1:nrow(grid_55km)) # add grid ID
-
-range(grid_55km$grid_id)
-
-raster::compareCRS(grid_110km, grid_55km)
+grid_55km <- readRDS("Output/RISK_32_grid_55km")
+grid_110km <- readRDS("Output/RISK_32_grid_110km")
+raster::compareCRS(grid_55km, grid_110km)
 
 ##### Define function for extraction
 
@@ -58,15 +33,15 @@ raster::compareCRS(grid_110km, grid_55km)
 extract_cells_pts <- function(pts, grid){
 
   # attribute the good crs 
-  pts_cea<- sf::st_transform(sf::st_as_sf(pts), crs=cea)
+  pts_moll<- sf::st_transform(sf::st_as_sf(pts), crs=moll)
   
-  if (raster::compareCRS(pts_cea, grid)){
+  if (raster::compareCRS(pts_moll, grid)){
     # count nb of points per grid cell
-    grid$n_occ <- lengths(st_intersects(grid, pts_cea))
+    grid$n_occ <- lengths(st_intersects(grid, pts_moll))
     # keep only cells with occurrences
     grid_fin <- grid %>% filter(n_occ>0) %>%
-      mutate(new_species = unique(pts_cea$new_species),
-             new_key = unique(pts_cea$new_key)) %>%
+      mutate(new_species = unique(pts_moll$new_species),
+             new_key = unique(pts_moll$new_key)) %>%
       st_drop_geometry()    
   } else {print("Pbm crs")} 
 
@@ -94,26 +69,28 @@ for (i in 1:length(occ_files)){
   occ_sp <- readRDS(paste0(occ_path, occ_files[i]))
   
   occ_sp_55 <- occ_sp %>% dplyr::filter(coordinateUncertaintyInMeters < 22500)
-  # occ_sp_110 <- occ_sp %>% dplyr::filter(coordinateUncertaintyInMeters < 55000)
+  occ_sp_110 <- occ_sp %>% dplyr::filter(coordinateUncertaintyInMeters < 55000)
   
   # extract cells
   df_sp_55 <- extract_cells_pts(occ_sp_55, grid_55km) # resolution = 55km x 55km (0.5 deg)
-  # df_sp_110 <- extract_cells_pts(occ_sp_110, grid_110km) # resolution = 110km x 110km (1 deg)
-  # df_sp_110_nofilter <- extract_cells_pts(occ_sp, grid_110km) # resolution = 110km x 110km (1 deg)
-  # 
+  df_sp_110 <- extract_cells_pts(occ_sp_110, grid_110km) # resolution = 110km x 110km (1 deg)
+  df_sp_110_nofilter <- extract_cells_pts(occ_sp, grid_110km) # resolution = 110km x 110km (1 deg)
+
   # save cells in dataframes
   all_sp_cells_55 <- bind_rows(all_sp_cells_55, df_sp_55)
   saveRDS(all_sp_cells_55, paste0(out_fold, "RISK_21_grid_cells_310_IAS_55km"))
   # # save cells in list
-  # all_sp_cells_110 <- bind_rows(all_sp_cells_110, df_sp_110)
-  # saveRDS(all_sp_cells_110, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km"))
+  all_sp_cells_110 <- bind_rows(all_sp_cells_110, df_sp_110)
+  saveRDS(all_sp_cells_110, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km"))
   # # save cells in list
-  # all_sp_cells_110_nofilter <- bind_rows(all_sp_cells_110_nofilter, df_sp_110_nofilter)
-  # saveRDS(all_sp_cells_110_nofilter, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km_nofilter"))
-  
+  all_sp_cells_110_nofilter <- bind_rows(all_sp_cells_110_nofilter, df_sp_110_nofilter)
+  saveRDS(all_sp_cells_110_nofilter, paste0(out_fold, "RISK_21_grid_cells_310_IAS_110km_nofilter"))
+
 }
 st_bbox(grid_110km)
 st_bbox(grid_55km)
+
+
 
 #### Explore results ####
 
@@ -212,8 +189,8 @@ ias_all_agg <- df_all_range %>%
     SR_tot = n(), # alien species richness per cell
     nb_occ_tot = sum(n_occ), # nb occ per cell (all ias sp)
     nb_occ_med = median(n_occ), # median nb occ per cell
-    range_tot = sum(n_cells_range),
-    range_med = median(n_cells_range)
+    range_tot = sum(log(n_cells_range)),
+    range_med = median(log(n_cells_range))
   ) 
 
 str(ias_all_agg)
@@ -226,54 +203,36 @@ ggcorrplot(cormat)
 
 # plot alien species richness 
 
-# Using Berhmann's cylindrical equal-area projection (CEA)
-cea<-"+proj=cea +lon_0=0 +lat_ts=30 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
-
-# load worldmap for spatial extent 
-world <- rnaturalearth::countries110
-# Convert into sf objects with CEA projection
-study_area_sf <- sf::st_transform(sf::st_as_sf(world), crs=cea)
-# create grid cells 110 km
-grid_110km = st_make_grid(
-  x= study_area_sf, cellsize = 110000, what = "polygons", square = F) %>%
-  st_sf() 
-grid_110km = grid_110km %>%
-  mutate(grid_id = 1:nrow(grid_110km))
-
-grid_55km = st_make_grid(
-  x= study_area_sf, cellsize = 55000, what = "polygons", square = F) %>%
-  st_sf() 
-grid_55km = grid_55km %>%
-  mutate(grid_id = 1:nrow(grid_55km)) # add grid ID
-
-range(grid_55km$grid_id)
+grid_55km <- readRDS("Output/RISK_32_grid_55km")
+grid_110km <- readRDS("Output/RISK_32_grid_110km")
 
 ias_agg_grid110 <- st_as_sf(left_join(ias_all_agg, grid_110km))
 ias_agg_grid55 <- st_as_sf(left_join(ias_all_agg, grid_55km))
 
 
 # plot species richness
+library(rnaturalearth)
+worldMap <- ne_countries(scale = "large", type = "countries", returnclass = "sf")
+moll <- crs("+proj=moll")
+wp_sf <- sf::st_transform(sf::st_as_sf(worldMap), crs=moll)
+
 SR_ias<- ggplot(data = ias_agg_grid55) +
+  geom_sf(data = wp_sf, fill = "grey80", color = NA) +
   geom_sf(aes(fill = SR_tot), color = NA) +
   scale_fill_viridis_c(option="magma", direction = -1) +
-  geom_sf(data = study_area_sf, fill = NA, color = "grey70") +
   theme_classic() +
-  labs(title = "Species richness of the target IAS",
+  labs(title = "Species richness of the target IAS in their exotic range",
        subtitle = paste0("Total number of IAS with at least one pixel: ",
                          length(unique(df_all$new_key))),
        x = "Longitude", y = "Latitude")
 SR_ias
 
 
-ggplot(grid %>% filter(n_occ>0), aes(fill=n_occ))+
-  geom_sf(color = NA)+
-  scale_fill_gradient(
-    low = "white", 
-    high = "red")
 
 
 
-########################
+################################################################################
+
 # compare with previous method (no equal carea + no filter on coord uncertainty)
 
 
@@ -291,3 +250,34 @@ tot_range2<- df_all2 %>%
 range_all <- left_join(tot_range, tot_range2, by ="new_species")
 ggplot(range_all, aes(x= n_cells_range.x, y = n_cells_range.y))+
   geom_point() + geom_abline(slope = 1, intercept = 0)
+
+# previous grids 
+# load worldmap for spatial extent 
+world <- rnaturalearth::countries110
+# Convert into sf objects with CEA projection
+study_area_sf <- sf::st_transform(sf::st_as_sf(world), crs=moll)
+
+# create grid cells 110 km
+grid_110km = st_make_grid(
+  x= study_area_sf, cellsize = 110000, what = "polygons", square = F) %>%
+  st_sf() 
+grid_110km = grid_110km %>%
+  mutate(grid_id = 1:nrow(grid_110km)) # add grid ID
+
+# compare projections (make sure both have the same projection)
+raster::compareCRS(study_area_sf, grid_110km)
+
+ggplot()+
+  geom_sf(data = study_area_sf, fill = "red") +
+  geom_sf(data = grid_110km, fill=NA)
+
+# create grid cells 55 km
+grid_55km = st_make_grid(
+  x= study_area_sf, cellsize = 55000, what = "polygons", square = F) %>%
+  st_sf() 
+grid_55km = grid_55km %>%
+  mutate(grid_id = 1:nrow(grid_55km)) # add grid ID
+
+range(grid_55km$grid_id)
+
+raster::compareCRS(grid_110km, grid_55km)

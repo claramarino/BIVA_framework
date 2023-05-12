@@ -18,7 +18,11 @@ baseline = rast(paste0(sdm_path, "data/output/baseline_scale_moll.tif"))
 var <- readRDS(paste0(sdm_path, "data/output/var_names.RDS"))
 names(baseline) <- var
 sp_info <- readRDS(paste0(sdm_path, "data/sp_list_to_model.RDS"))
+
+# bias in bg or not ?
 bg_points <- readRDS(paste0(sdm_path, "data/bg_points_bias.RDS"))
+bg_points <- readRDS(paste0(sdm_path, "data/bg_points.RDS"))
+
 groups <- readRDS(paste0(sdm_path, "data/collinearity_groups.RDS"))
 
 
@@ -58,7 +62,8 @@ kept_vars$group2 <- "bio4"
 kept_vars$group3 <- "bio5"
 kept_vars$group4 <- "bio16"
 kept_vars$group5 <- "bio15"
-kept_vars$group5 <- "pop"
+kept_vars$group6 <- "pop"
+kept_vars$terr_vert <- "terr_vert"
 
 # On récupère maintenant toutes les variables pas corrélées aux autres
 lone_vars <- unlist(groups[which(sapply(groups, length) == 1)])
@@ -72,19 +77,25 @@ if(nrow(kept_vars) == 1){
                             sapply(lone_vars, rep,  nrow(kept_vars)))
   }
 
+# save with target group
+saveRDS(vars_per_sp, file = paste0(sdm_path, "data/vars_per_sp_tg.RDS"))
+
 # remove target group from variable selection
 vars_per_sp$plant <- vars_per_sp$terr_vert <- vars_per_sp$invert_fish <- NULL
-
 saveRDS(vars_per_sp, file = paste0(sdm_path, "data/vars_per_sp.RDS"))
 
 
 
 ##### Calibration of one model per sp with all selected var #####
 
-vars_per_sp <- readRDS(paste0(sdm_path, "data/vars_per_sp.RDS"))
+vars_per_sp <- readRDS(paste0(sdm_path, "data/vars_per_sp_tg.RDS"))
 
 
-for (sp in vars_per_sp$species){
+fourmi_bourdon <- c("1314773", "1340503")
+
+
+
+for (sp in fourmi_bourdon){
   # sp = "1311649"
   sp_ok = paste0("sp", sp)
   
@@ -94,6 +105,15 @@ for (sp in vars_per_sp$species){
   sp_env_stack <- baseline[[
     vars_per_sp[vars_per_sp$species == sp, 
                 2:ncol(vars_per_sp)]]]
+  
+  tg = sp_info$target_group[sp_info$sp_key==sp]
+  
+  gp = c("plant","terr_vert","invert_fish")
+  
+  to_rm <- gp[which(gp!=tg)]
+  for(g in to_rm){
+    sp_env_stack[[g]] <- NULL
+  }
 
   # 1. Biomod2 doit-il générer des pseudoabsences ?
   # Non on a des points de bg
@@ -101,22 +121,7 @@ for (sp in vars_per_sp$species){
   runs_PA <- 0
   nb_PA <- 0
   runs_CV <- 2
-  
-  # 2. retirer les pts de bg qui sont dans des cellules avec présence
-  
-  # cellules avec présence
-  species_cells <- cellFromXY(baseline,
-                              sp_occ[, c("x", "y")])
-  
-  # if(any(bg_cells %in% species_cells)){
-  #   bg_safe <- bg_data[-which(bg_cells %in% species_cells), ]
-  # } else {
-  #   bg_safe <- bg_data
-  # }
-  # 
-  # # nombre de cell pour chaque condition
-  # prNum <- nrow(sp_occ) # number of presences
-  # bgNum <- nrow(bg_safe) # number of backgrounds
+
 
   # final points to consider: bind presence and background
   F_points <- bind_rows(sp_occ, bg_data)
@@ -127,8 +132,8 @@ for (sp in vars_per_sp$species){
   P_points <- F_points[, "Observed"]
   
   
-  if(!dir.exists(paste0(sdm_path, "var_selection/all_vars/", sp_ok))){
-    dir.create(paste0(sdm_path, "var_selection/all_vars/", sp_ok), recursive = T)
+  if(!dir.exists(paste0(sdm_path, "fourmi_bourdon/", sp_ok))){
+    dir.create(paste0(sdm_path, "fourmi_bourdon/", sp_ok), recursive = T)
   }
   # setwd(paste0(initial_wd, "/var_selection/all_vars/", sp))
   # 
@@ -140,13 +145,13 @@ for (sp in vars_per_sp$species){
   run_data <- BIOMOD_FormatingData(resp.name = sp_ok,
                                    resp.var = P_points, 
                                    expl.var = MyExpl, 
-                                   dir.name = paste0(sdm_path, "var_selection/all_vars"),
+                                   dir.name = paste0(sdm_path, "fourmi_bourdon"),
                                    resp.xy = coorxy,
                                    PA.nb.rep = runs_PA,
                                    PA.nb.absences = nb_PA,
                                    PA.strategy = 'random')
   
-  saveRDS(run_data, file = paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/run_data.RDS"))
+  saveRDS(run_data, file = paste0(sdm_path, "fourmi_bourdon/", sp_ok, "/run_data.RDS"))
   
   myBiomodOptions <- BIOMOD_ModelingOptions()
   
@@ -163,15 +168,18 @@ for (sp in vars_per_sp$species){
                                 nb.cpu = 4, 
                                 do.progress = TRUE)
   
-  saveRDS(model_runs, file = paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/model_runs.RDS"))
+  saveRDS(model_runs, file = paste0(sdm_path, "fourmi_bourdon/", sp_ok, "/model_runs.RDS"))
   print(Sys.time())
 }
+
+
+
 
 ##### Check computation time #####
 
 # voir le temps mis par espèce
 # lié au nombre d'occurrences ?
-a <- fs::dir_info(paste0(sdm_path, "var_selection/all_vars/"))
+a <- fs::dir_info(paste0(sdm_path, "fourmi_bourdon/"))
 a$duree <- a$change_time - a$birth_time
 for (i in 1:nrow(sp_info)){
   sp = paste0("sp",sp_info$sp_key[i])
@@ -194,7 +202,7 @@ dev.off()
 
 
 ##### Etape 3 : sélection des variables à importance significative #####
-a <- fs::dir_info(paste0(sdm_path, "var_selection/all_vars/"))
+a <- fs::dir_info(paste0(sdm_path, "fourmi_bourdon/"))
 sp_vars <- c()
 for (i in 1:nrow(sp_info)){
   sp = paste0("sp",sp_info$sp_key[i])
@@ -220,17 +228,9 @@ for (i in 1:length(sp_vars)){
   sp_ok = sp_vars[i]
   sp = substring(sp_ok, 3)
   
-  model3_runs <- readRDS(paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/model_runs.RDS"))
-  model3_runs@variables.importance@link <- 
-    paste0(sdm_path, "var_selection/all_vars/", sp_ok, "/.BIOMOD_DATA/1/variables.importance")
-  max_runs <- readRDS(paste0(sdm_path, "var_selection/maxent/", sp_ok, "/model_runs.RDS"))
-  max_runs@variables.importance@link <- 
-    paste0(sdm_path, "var_selection/maxent/", sp_ok, "/.BIOMOD_DATA/1/variables.importance")
-  
-  gg_varimp3 <- get_variables_importance(model3_runs) %>% filter(algo!="MAXENT")
-  gg_varimp_max <- get_variables_importance(max_runs)
-  
-  gg_varimp <- bind_rows(gg_varimp3, gg_varimp_max) %>% distinct()
+  model_runs <- readRDS(paste0(sdm_path, "fourmi_bourdon/", sp_ok, "/model_runs.RDS"))
+
+  gg_varimp <- get_variables_importance(model_runs)
 
   colnames(gg_varimp) <- c("id", 
                            "PA.Run",
@@ -250,7 +250,7 @@ for (i in 1:length(sp_vars)){
   
   
   
-  png(paste0(sdm_path, "graphs/variable_importance_", sp_ok, ".png"))
+  png(paste0(sdm_path, "fourmi_bourdon/var_imp_", sp_ok, ".png"))
   print(p)
   dev.off()
   
@@ -294,7 +294,7 @@ for (i in 1:length(sp_vars)){
     {
       message("Negative correlations detected among selected variable: removing less important & correlated variables")
       
-      png(paste0(sdm_path, "graphs/variable_interaction_", sp_ok, ".png"))
+      png(paste0(sdm_path, "fourmi_bourdon/variable_interaction_", sp_ok, ".png"))
       corPlot(var.interactions[, -c(1:5)], method = "pearson")
       dev.off()  
       
@@ -341,22 +341,13 @@ for (i in 1:length(sp_vars)){
 
 
 # classic vimp <.1
-saveRDS(sel_vars, file = paste0(sdm_path, "var_selection/04_selected_variables.RDS"))
-saveRDS(sp_info, file = paste0(sdm_path, "var_selection/04_sp_info_with_var.RDS"))
-
-# classic vimp <.05
-saveRDS(sel_vars, file = paste0(sdm_path, "var_selection/04_selected_variables_imp005.RDS"))
-saveRDS(sp_info, file = paste0(sdm_path, "var_selection/04_sp_info_with_var_imp005.RDS"))
-
-# vimp >.05 or min 6 first var 
-saveRDS(sel_vars, file = paste0(sdm_path, "var_selection/04_selected_variables_imp005_n6.RDS"))
-saveRDS(sp_info, file = paste0(sdm_path, "var_selection/04_sp_info_with_var_imp005_n6.RDS"))
+saveRDS(sel_vars, file = paste0(sdm_path, "fourmi_bourdon/selected_variables.RDS"))
+saveRDS(sp_info, file = paste0(sdm_path, "fourmi_bourdon/sp_info_with_var.RDS"))
 
 
 
-
-sel_vars <- readRDS(paste0(sdm_path, "var_selection/04_selected_variables.RDS"))
-sp_info <- readRDS(paste0(sdm_path, "var_selection/04_sp_info_with_var.RDS"))
+sel_vars <- readRDS(paste0(sdm_path, "fourmi_bourdon/selected_variables.RDS"))
+sp_info <- readRDS(paste0(sdm_path, "fourmi_bourdon/sp_info_with_var.RDS"))
 
 
 hist(sp_info$nb_variables)

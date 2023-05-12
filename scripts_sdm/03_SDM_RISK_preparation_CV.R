@@ -62,11 +62,12 @@ bg_points <- dismo::randomPoints(baseline,
 bg_points <- dismo::randomPoints(baseline,
                                  n = 30000)
 
-
+plot(bg_points[,1], bg_points[,2])
 
 bias <- baseline[["all_exo_occ"]]
 minValue(bias)
 maxValue(bias)
+boxplot(bias)
 
 bias <- bias+abs(minValue(bias))
 minValue(bias)
@@ -74,6 +75,7 @@ minValue(bias)
 # Normalize bias file between 0 and 1.
 library(spatialEco)
 bias <- raster.transformation(rast(bias), trans="norm")
+
 minValue(raster(bias))
 maxValue(raster(bias))
 
