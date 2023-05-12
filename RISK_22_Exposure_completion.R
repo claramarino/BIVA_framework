@@ -217,7 +217,80 @@ prop_country110 <- left_join(comp_110, tot110)%>%
   mutate(prop = nb_sp/tot_sp_count)
 
 
+##### Add gbif occ #####
 
+
+# select resolution
+res = "55" # 55km or 110km
+
+# load grid 
+grid <- readRDS(paste0("Output/RISK_32_grid_",res, "km"))
+
+
+# load gbif occ per poly
+
+library(rgbif)
+rgbif::occ_count(st_as_sf(grid[1,]))
+
+# ne fonctionne pas
+
+# utiliser la densité d'occurrences générée par meyer
+# résolution = 100km
+
+grid100km <- readRDS(paste0("Output/RISK_32_grid_110km"))
+
+meyer = "Z:/THESE/5_Data/Distribution_spatiale/GBIF_data_bias_Meyer/"
+list.files(meyer)
+
+dl_meyer <- list(
+  amph = read.csv2(paste0(meyer, "Meyer_etal_data_amph_110km.csv")) %>% 
+    select(Longitude, Latitude, RecordDensity) %>%
+    rename(RecDens_amph = RecordDensity),
+  mam = read.csv2(paste0(meyer, "Meyer_etal_data_mamm_110km.csv")) %>% 
+    select(Longitude, Latitude, RecordDensity) %>%
+    rename(RecDens_mam = RecordDensity),
+  bird = read.csv2(paste0(meyer, "Meyer_etal_data_aves_110km.csv")) %>% 
+    select(Longitude, Latitude, RecordDensity) %>%
+    rename(RecDens_bird = RecordDensity)
+) %>%
+  reduce(full_join, by=c("Longitude", "Latitude")) %>%
+  replace_na(list(RecDens_mam = 0, RecDens_amph = 0)) %>%
+  mutate(dens_all = RecDens_mam + RecDens_amph + RecDens_bird)
+
+hist(log(dl_meyer$dens_all))
+
+dens_sf <- sf::st_as_sf(dl_meyer,
+                        coords = c("Longitude", "Latitude"),
+                        crs = "+proj=longlat +datum=WGS84")
+
+# kernel smooth à faire autour des points ?
+# générer un buffer autour de chaque point pour éviter les problème de non filling
+# de certaines cellules ??
+
+
+dens_sf_moll <- sf::st_transform(dens_sf, crs = raster::crs("+proj=moll"))
+
+raster::crs(grid100km) == raster::crs(dens_sf_moll)
+
+dens_grid <- st_intersection(grid100km, dens_sf_moll)
+
+dens_cell <- dens_grid %>%
+  st_drop_geometry() %>%
+  group_by(grid_id) %>%
+  summarise(dens = mean(dens_all)) %>%
+  mutate(log_dens = log(dens+1))
+
+
+dens_final <- left_join(grid100km, dens_cell)
+hist(dens_final$dens)
+hist(dens_final$log_dens)
+
+ggplot(dens_final, aes(fill = log_dens))+
+  geom_sf(color=NA)+
+  scale_fill_gradient(high = "green", low = "red", guide = "colorbar")
+
+
+length(unique(dens_grid$grid_id))
 
 
 ############## Map countries completion ###################
