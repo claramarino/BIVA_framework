@@ -6,7 +6,7 @@ library(tidyverse)
 library(sf)
 
 # choose resolution 
-res = "55" # 55 or 110 km
+res = "110" # 55 or 110 km
 # grid
 grid_terr <- readRDS(paste0("Output/RISK_32_grid_", res, "km"))
 
@@ -54,6 +54,13 @@ rept_IDs <- rept_nat %>% st_drop_geometry()  %>%
   dplyr::mutate(objectid = 1:nrow(rept_nat)) %>%
   select(objectid, binomial)
 rm(rept_nat)
+
+
+# count total number of species
+length(unique(mam_IDs$binomial))
+length(unique(rept_IDs$binomial))
+length(unique(bird_IDs$binomial))
+
 
 # load IAS-A info
 
@@ -180,6 +187,65 @@ sr_all <- readRDS(paste0("Output/Sensitivity/SR_per_cell/RISK_33_SR_tot_ias_a_t_
 grid_terr$cell_id = 1:nrow(grid_terr)
 
 
+dl_all_norm <- lapply(sr_all, function(x){
+  
+  #x=sr_all$mam # for test
+  
+  #------ initialisation
+  dl_max_min  <- dl_log <- dl_rank <- x
+  
+  # max min linear
+  maxcol <- apply(x, 2, max)
+  mincol <- apply(x, 2, min)
+  # log transformed
+  maxlog <- apply(x, 2, function(x){max(log(x+1))})
+  minlog <- apply(x, 2, function(x){min(log(x+1))})
+  # ranks
+  x_rank <- x %>%
+    dplyr::mutate_at(vars(-cell_id), dense_rank)
+  maxrank <- apply(x_rank, 2, max)
+  minrank <- apply(x_rank, 2, min)
+  
+  #------ normalization
+  for (i in 2:length(maxcol)){
+    # max min
+    dl_max_min[,i] <- (x[,i]-mincol[i])/(maxcol[i]-mincol[i])
+    # log-transformed
+    dl_log[,i] <- ((log(x[,i]+1)-minlog[i]))/
+      (maxlog[i]-minlog[i])
+    # ranks
+    dl_rank[,i] <- (x_rank[,i]-minrank[i])/(maxrank[i]-minrank[i])
+  }
+  
+  #------ correct names
+  colnames(dl_max_min)[2:ncol(dl_max_min)] <- paste0(colnames(x)[2:ncol(x)], "_max_min")
+  colnames(dl_log)[2:ncol(dl_log)] <- paste0(colnames(x)[2:ncol(x)], "_log")
+  colnames(dl_rank)[2:ncol(dl_rank)] <- paste0(colnames(x)[2:ncol(x)], "_rank")
+  
+  # bind all tables
+  all_norm <- list(
+    dl_max_min, dl_log, dl_rank) %>% 
+    reduce(left_join, by="cell_id")
+  
+  return(all_norm)
+  
+})
+
+lapply(dl_all_norm, summary)
+
+# keep only metrics related to ias-a
+dl_all_norm <- lapply(dl_all_norm, function(x){
+  x %>% dplyr::select(cell_id, contains("SR_ias_a"))
+})
+
+# save sensitivity table
+saveRDS(dl_all_norm, paste0("Output/Sensitivity/RISK_33_sensit_norm_", res, "_km"))
+
+
+
+
+############### Tests de plots ##################
+
 grid_mam <- left_join(grid_terr, sr_all$mam) %>%
   replace_na(list(SR_tot = 0, SR_ias_a = 0, SR_ias_t = 0, SR_ias_nt = 0))
 
@@ -207,6 +273,8 @@ m<- ggplot(grid_mam)+
   scale_fill_gradient2(low = "#313695", mid = "#FFFFBF", high = "#D73029")+
   theme_classic()+
   ggtitle("Mammalia")
+
+m
 
 library(RColorBrewer)
 display.brewer.all(colorblindFriendly = TRUE) 
@@ -241,7 +309,7 @@ b<-ggplot(grid_bird)+
   scale_fill_gradient2(low = "#313695", mid = "#FFFFBF", high = "#D73029")+
   theme_classic()+
   ggtitle("Aves")
-
+b
 ggplot(grid_bird)+
   geom_sf(aes(fill=SR_ias_a), color=NA)  +
   scale_fill_viridis_c(option = "inferno", direction = -1)+
@@ -287,18 +355,9 @@ r <-  ggplot(grid_rept)+
 
 r
 
-range(grid_terr$grid_id)
-range(sr_all$bird$cell_id)
 
 
 
-
-library(ggpubr)
-
-
-pdf(paste0("Fig/RISK_33_resid_iasA_SRtot_BMR_", res, ".pdf"), 8, 5)
-ggarrange(b, m, r, ncol = 2, nrow=2, common.legend = T)
-dev.off()
 
 
 

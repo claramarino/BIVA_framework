@@ -10,7 +10,7 @@ library(tidyverse)
 ###### Data loading #####
 
 # select resolution
-res = "55" # 55km or 110km
+res = "110" # 55km or 110km
 
 # Load occurrence ias
 in_fold = "Output/Exposure/Exposure_raw/"
