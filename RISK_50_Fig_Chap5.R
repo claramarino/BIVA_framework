@@ -10,19 +10,21 @@ library(cartogram)
 library(cowplot)
 library(grid)
 library(gridExtra) 
+library(biscale)
 
 # select resolution
 res = "110" # 55km or 110km
 
 # load grid 
 grid <- readRDS(paste0("Output/RISK_32_grid_",res, "km"))
+grid$cell_id = 1:nrow(grid)
 range(grid$grid_id)
 
 # load data
 dl_expo_norm <- readRDS(paste0("Output/Exposure/RISK_23_expo_norm_", res, "_km"))
 dl_sensit <- readRDS(paste0("Output/Sensitivity/RISK_33_sensit_norm_", res, "_km"))
 df_compl <- readRDS(paste0("Output/Exposure/RISK_22_Comp_smpl_eff_", res, "km"))
-
+df_compl_sens <- readRDS(paste0("Output/Sensitivity/Completeness/RISK_34_completeness_ed_se_", res))
 
 #### Suppl Fig 1 correlation norm method ####
 
@@ -175,7 +177,7 @@ lapply(dl_metrics, function(x){
 
 #### Fig 1 Expo + sensib = risk #####  
 
-grid$cell_id = 1:nrow(grid)
+
 class="bird"
 plot_expo <- function(class){
   # class is bird, mam, rept
@@ -227,7 +229,7 @@ plot_biv  <- function(class){
     rename(Sensitivity = SR_ias_a_max_min)
   
   data <- bi_class(dat_sf, x = Exposure, y = Sensitivity, 
-                   style = "fisher", dim = 4)
+                   style = "fisher", dim = 3)
   
   # bi_class_breaks(dat_sf, x = Exposure, y = Sensitivity, style = "fisher",
   #                 dim = 4, dig_lab = c(4, 5), split = FALSE)
@@ -235,7 +237,7 @@ plot_biv  <- function(class){
   map <- ggplot() +
     geom_sf(data = data, aes(fill = bi_class), 
             color = NA, show.legend = FALSE) + #
-    bi_scale_fill(pal = "BlueOr", dim = 4)+
+    bi_scale_fill(pal = "BlueOr", dim = 3)+
     theme_classic()
 
   return(map)
@@ -255,18 +257,20 @@ s <- ggarrange(sb, sm, sr,
 
 
 biv <- ggarrange(bivb, bivm, bivr, ncol = 1, nrow= 3, legend="none")
-
+biv
 pdf("Fig/Chap5_Fig1_expo_sensib_biv.pdf", 8,6)
 ggarrange(e, s, biv, ncol = 3, common.legend = F)
 dev.off()
 
 
 legend_biv <- bi_legend(pal = "BlueOr",
-                    dim = 4,
+                    dim = 3,
                     xlab = "Higher exposure ",
                     ylab = "Higher sensitivity ",
                     size = 8)
 legend_biv
+
+
 
 pdf("Fig/Chap5_Fig1_Legend_S.pdf")
 grid.newpage()
@@ -321,6 +325,20 @@ dev.off()
 
 
 #### Fig 2 Tot expo + Completion expo ####
+
+# correlation ed se 
+df_com <- df_compl %>% st_drop_geometry() %>%
+  filter(!is.na(norm_dens))
+cor.test(df_com$norm_dens, df_com$DB_and_GRIIS)
+
+ggplot(df_com, aes(x=norm_dens, y =DB_and_GRIIS))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+mod <- lm(norm_dens~DB_and_GRIIS, data= df_com)
+summary(mod)
+plot(mod)
+
 
 # aggregate to larger grain size
 # sinon on ne voit pas la distorsion
@@ -402,24 +420,71 @@ ggplot(rel_expo_comp,
   theme(legend.position = "top")
 dev.off()
 
-mod = lm(SR_tot_ias_log~comp_se_product, data = rel_expo_comp)
+mod = lm(expo_norm~comp_se_product+class, data = rel_expo_comp)
 summary(mod)
 
+
+mod = lm(SR_tot_ias_log~comp_se_product+class, data = rel_expo_comp)
+summary(mod)
+
+
 plot(mod)
+cor.test(rel_expo_comp$SR_tot_ias_log, rel_expo_comp$comp_se_product)
+cor.test(rel_expo_comp$expo_norm, rel_expo_comp$comp_se_product)
+
+
+#### Fig 3B Completion sensitivity ####
+
+grid_compl_sens <- left_join(grid, df_compl_sens$rept)
+
+# relationship between both components of completeness
+ggplot(df_compl_sens$all, 
+       aes(x = se, y = ed))+
+  geom_point(alpha = .3, color = "grey60", size=2)+
+  xlab("Sampling effort IUCN")+
+  ylab("Knowledge on IAS threat")+
+  theme_classic()
+
+# plot iucn sampling effort 
+ggplot(grid_compl_sens)+
+  geom_sf(aes(fill=se), color=NA) +
+  scale_fill_viridis_c(na.value = "grey80")+
+  theme_classic()+
+  ggtitle("IUCN sampling effort")
+
+# global knowledge ias threat
+ggplot(grid_compl_sens)+
+  geom_sf(aes(fill=ed), color=NA) +
+  scale_fill_viridis_c(na.value = "grey80")+
+  theme_classic()+
+  ggtitle("Knowledge on IAS threat")
+
+#final completeness = same as ed
+ggplot(grid_compl_sens)+
+  geom_sf(aes(fill=comp_prod), color=NA) +
+  scale_fill_viridis_c(na.value = "grey80")+
+  theme_classic()+
+  ggtitle("Completeness")
+
 
 
 ##### Fig 3 Sensitivity ~ Total SR ####
 
 sr_all <- readRDS(paste0("Output/Sensitivity/SR_per_cell/RISK_33_SR_tot_ias_a_t_nt_", res))
 
-grid_terr$cell_id = 1:nrow(grid_terr)
+grid$cell_id = 1:nrow(grid)
 
 # mammals 
 
-grid_mam <- left_join(grid_terr, sr_all$mam) %>%
+grid_mam <- left_join(grid, sr_all$mam) %>%
   replace_na(list(SR_tot = 0, SR_ias_a = 0, SR_ias_t = 0, SR_ias_nt = 0))
 
 lm_mam <- lm(log(SR_ias_a+1)~log(SR_tot+1), data = grid_mam)
+summary(lm_mam)
+
+cor.test(log(grid_mam$SR_ias_a+1), log(grid_mam$SR_tot+1))
+
+
 grid_mam$res = residuals(lm_mam)
 
 m<- ggplot(grid_mam)+
@@ -430,10 +495,12 @@ m<- ggplot(grid_mam)+
 
 # birds 
 
-grid_bird <- left_join(grid_terr, sr_all$bird) %>%
+grid_bird <- left_join(grid, sr_all$bird) %>%
   replace_na(list(SR_tot = 0, SR_ias_a = 0, SR_ias_t = 0, SR_ias_nt = 0))
 lm_bird <- lm(log(SR_ias_a+1)~log(SR_tot+1), data = grid_bird)
 grid_bird$res = residuals(lm_bird)
+
+cor.test(log(grid_bird$SR_ias_a+1), log(grid_bird$SR_tot+1))
 
 b<-ggplot(grid_bird)+
   geom_sf(aes(fill=res), color=NA) +
@@ -443,11 +510,13 @@ b<-ggplot(grid_bird)+
 
 # reptiles
 
-grid_rept <- left_join(grid_terr, sr_all$rept) %>%
+grid_rept <- left_join(grid, sr_all$rept) %>%
   replace_na(list(SR_tot = 0, SR_ias_a = 0, SR_ias_t = 0, SR_ias_nt = 0))
 
 lm_rept <- lm(log(SR_ias_a+1)~log(SR_tot+1), data = grid_rept)
 grid_rept$res = residuals(lm_rept)
+
+cor.test(log(grid_rept$SR_ias_a+1), log(grid_rept$SR_tot+1))
 
 r <-  ggplot(grid_rept)+
   geom_sf(aes(fill=res), color=NA) +
@@ -460,7 +529,7 @@ ggarrange(b, m, r, ncol = 2, nrow=2, common.legend = T)
 dev.off()
 
 
-###### Fig 4 - #######
+###### Fig 4 - High risk cells only #######
 
 # plot the high risk cells only
 
@@ -487,6 +556,61 @@ plot_high_risk <- function(class){
   }
 
 
-plot_high_risk("bird")
-plot_high_risk("mam")
-plot_high_risk("rept")
+rb <- plot_high_risk("bird")+
+  labs(title = "Aves")
+rm <- plot_high_risk("mam")+
+  labs(title = "Mammalia")
+rr <- plot_high_risk("rept")+
+  labs(title = "Reptilia")
+
+pdf("Fig/Chap5_Suppl_fg_high_risk.pdf", 6, 5)
+ggarrange(rb, rm, rr, ncol= 2, nrow=2, common.legend = T)
+dev.off()
+
+# plot high risk and low risk zones
+
+bi_pal(pal = "BlueOr",
+       dim = 4,preview = F)
+class ='bird'
+plot_highlow_risk <- function(class){
+  dat1 <- dl_sensit[[class]] 
+  dat2 <- dl_expo_norm[[class]]
+  
+  dat_sf <- left_join(left_join(grid, dat1), dat2) %>%
+    replace_na(list(expo_max_min = 0, expo_log = 0, expo_rank = 0)) %>%
+    mutate(Exposure = expo_max_min/max(expo_max_min)) %>%
+    replace_na(list(SR_ias_a_max_min = 0, SR_ias_a_log = 0, SR_ias_a_rank = 0))%>%
+    rename(Sensitivity = SR_ias_a_max_min)
+  
+  data <- bi_class(dat_sf, x = Exposure, y = Sensitivity, 
+                   style = "fisher", dim = 3)
+
+  data_high <- data %>%
+    mutate(high_risk = if_else(bi_class=="3-3", "1", "other")) %>%
+    mutate(high_risk = if_else(bi_class=="1-1", "0", high_risk))
+  
+  table(data_high$high_risk)
+  ggplot(data_high)+
+    geom_sf(aes(fill=high_risk), color=NA) +
+    scale_fill_manual(values = c("1" = "green4", "0" = "wheat1", "other" = "palegreen2"))+
+    theme_classic()
+}
+
+
+rb <- plot_highlow_risk("bird")+
+  labs(title = "Aves")
+rm <- plot_highlow_risk("mam")+
+  labs(title = "Mammalia")
+rr <- plot_highlow_risk("rept")+
+  labs(title = "Reptilia")
+
+pdf("Fig/Chap5_Fig2_high_and_low_risk.pdf", 6, 5)
+ggarrange(rb, rm, rr, ncol= 2, nrow=2, common.legend = T)
+dev.off()
+
+
+
+ggplot(data_high)+
+  geom_sf(aes(fill=high_risk), color=NA) +
+  scale_fill_manual(values = c("1" = "maroon", "0" = "wheat1", "other" = "lightpink"))+
+  theme_classic()
