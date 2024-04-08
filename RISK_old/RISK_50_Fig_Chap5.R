@@ -41,14 +41,14 @@ df_expo_norm <- bind_rows(expo_norm)
 log_max_min <- ggplot(df_expo_norm %>% filter(class!="all_groups"),
        aes(x=expo_max_min, y = expo_log)) +
   geom_point(color = "grey", alpha = .2)+
-  geom_smooth(aes(color = class), method = 'lm')+
+  geom_smooth(aes(color = class), method = 'loess')+
   theme_classic()
 
 
 log_rank <- ggplot(df_expo_norm %>% filter(class!="all_groups"),
                       aes(x=expo_rank, y = expo_log))+
   geom_point(color = "grey", alpha = .2)+
-  geom_smooth(aes(color = class), method = "lm")+
+  geom_smooth(aes(color = class), method = "loess")+
   theme_classic()
 
 
@@ -73,6 +73,12 @@ hist(dl_expo_norm$bird$expo_rank)
 hist(dl_expo_norm$mam$expo_max_min)
 hist(dl_expo_norm$mam$expo_log)
 hist(dl_expo_norm$mam$expo_rank)
+
+pdf("Fig/Suppl_Fig3A_Norm_exposure.pdf", 6, 5)
+ggarrange(log_max_min, log_rank,rank_max_min,
+          ncol = 2, nrow = 2, common.legend = T)
+dev.off()
+
 
 # on prend expo max-min => la + simple
 # faudra juste vérifier que les bivariate sont identiques si on prend log
@@ -110,9 +116,10 @@ rank_max_min <- ggplot(df_sensi_norm,
   theme_classic()
 
 
+pdf("Fig/Suppl_Fig3B_Norm_sensitivity.pdf", 6, 5)
 ggarrange(log_max_min, log_rank,rank_max_min,
           ncol = 2, nrow = 2, common.legend = T)
-
+dev.off()
 
 lapply(dl_sensit, function(x){
   round(cor(x %>% select(contains("SR")), method = "pearson"), 3)
@@ -173,9 +180,39 @@ lapply(dl_metrics, function(x){
       method = "pearson")
 })
 
+#### Suppl Fig 3 spatial diff metrics expo ####
+grid_all <- left_join(grid, dl_expo_norm$all)
 
 
+all_sr <- ggplot(grid_all)+
+  geom_sf(aes(fill = SR_tot_ias_max_min), color = NA)+
+  scale_fill_viridis_c(option="viridis", direction = -1, na.value = "grey80" )+
+  theme_classic()
+all_impact <- ggplot(grid_all)+
+  geom_sf(aes(fill = med_ib_max_min), color = NA)+
+  scale_fill_viridis_c(option="viridis", direction = -1, na.value = "grey80" )+
+  theme_classic()
+all_range <- ggplot(grid_all)+
+  geom_sf(aes(fill = med_range_max_min), color = NA)+
+  scale_fill_viridis_c(option="viridis", direction = -1, na.value = "grey80" )+
+  theme_classic()
+
+pdf("Fig/Chap5_FigS3_spatial_expo_metrics.pdf", 8, 12)
+ggarrange(all_sr, all_range, all_impact, ncol = 1, nrow=3,
+          common.legend = T, legend = "top")
+dev.off()
 #### Fig 1 Expo + sensib = risk #####  
+
+# cb de cells avec au moins une des 304 IAS
+lapply(dl_expo_norm, function(x){
+  nrow(x)/17257
+})
+
+
+# cb de cells avec sp sensibles
+lapply(df_compl_sens, function(x){
+  nrow(x %>% filter(SR_ias_a>0))/17257
+})
 
 
 class="bird"
@@ -433,7 +470,11 @@ cor.test(rel_expo_comp$SR_tot_ias_log, rel_expo_comp$comp_se_product)
 cor.test(rel_expo_comp$expo_norm, rel_expo_comp$comp_se_product)
 
 
-#### Fig 3B Completion sensitivity ####
+#### Fig 4 Completion sensitivity ####
+
+
+# range de valeur completeness
+lapply(df_compl_sens, summary)
 
 grid_compl_sens <- left_join(grid, df_compl_sens$rept)
 
@@ -467,6 +508,119 @@ ggplot(grid_compl_sens)+
   ggtitle("Completeness")
 
 
+
+########### try cartogram sensit with completeness ?
+
+# cartogram function for each group
+class="rept"
+
+# initialize grid 5deg
+df_5deg <- grid %>% 
+  st_make_grid(cellsize = 550000, square = F) %>% 
+  st_sf()
+
+cartog_sensit <- function (class){
+  # get grid completeness for the class
+  grid_compl_sens <- left_join(grid, df_compl_sens[[class]])
+  
+  #intersection with 5deg grid
+  df_compl_5deg <- st_intersection(grid_compl_sens, 
+                                   df_5deg %>% mutate(id_5deg = 1:nrow(df_5deg))) %>%
+    st_drop_geometry() %>%
+    group_by(id_5deg) %>%
+    summarise(comp_prod = mean(na.omit(comp_prod)))
+  df_compl_5deg_sf <- left_join(df_5deg %>% mutate(id_5deg = 1:nrow(df_5deg)),
+                                df_compl_5deg)
+  
+  cartog_prod <- cartogram_ncont(df_compl_5deg_sf,
+                                 weight = "comp_prod")
+  
+  # add sensitivity value for color
+  sensit <- left_join(
+    grid,
+    dl_sensit[[class]] %>% dplyr::select(cell_id, SR_ias_a_max_min)) %>%
+    rename(sensitivity = SR_ias_a_max_min) %>%
+    replace_na(list(sensitivity=0))
+  # aggregate sensit at higher resolution
+  df_sensit_5deg <- st_intersection(sensit,
+                                  df_5deg %>% mutate(id_5deg = 1:nrow(df_5deg))) %>%
+    st_drop_geometry() %>%
+    group_by(id_5deg) %>%
+    summarise(Sensitivity = mean(na.omit(sensitivity)))
+  
+  
+  cartog_compl_expo <- left_join(cartog_prod, df_sensit_5deg)
+  
+  
+  ggplot()+
+    geom_sf(data = grid, fill = "grey80", color = NA)+
+    geom_sf(data = cartog_compl_expo, aes(fill=Sensitivity), color = NA) +
+    scale_fill_viridis_c(option="viridis")+
+    theme_classic()
+}
+
+
+cb <- cartog_sensit("bird")
+cm <- cartog_sensit("mam")
+cr <- cartog_sensit("rept")
+
+
+cb
+cm
+cr
+pdf("Fig/Fig4_Sensit_compl_map_BMR.pdf", 9,8)
+ggarrange(cb, cm, cr, legend = "top", ncol = 2, nrow=2)
+dev.off()
+
+
+
+# sensitivity ~ completeness 
+
+
+sens_compl <- function(class){
+  compl_sens <- left_join(
+    dl_sensit[[class]] %>% dplyr::select(cell_id, SR_ias_a_max_min),
+    df_compl_sens[[class]]) %>%
+  rename(sensitivity = SR_ias_a_max_min) %>%
+    filter(sensitivity>0)
+
+  # ggplot(compl_sens, 
+  #        aes(x = comp_prod, y = sensitivity))+
+  #   geom_point(alpha = .3, color = "grey60", size=2)+
+  #   #geom_smooth(aes(color=Class), method = "lm")+
+  #   xlab("Completeness")+
+  #   ylab("Sensitivity")+
+  #   geom_rug(size=0.1) +
+  #   theme_classic()+
+  #   theme(legend.position = "top")
+  ggscatterhist(
+    compl_sens, x = "comp_prod", y = "sensitivity",
+    color = "maroon", alpha = .3,
+    margin.plot = "density",
+    margin.params = list(fill = "lightpink", color = "maroon"),
+    xlab = "Completeness",
+    ylab = "Sensitivity",
+    main.plot.size =1,
+    ggtheme = theme_classic()
+  )
+    
+}
+
+
+pdf("Fig/Chap5_Fig4_Sensit_compl_bird.pdf", 3,3)
+sens_compl("bird")
+dev.off()
+
+pdf("Fig/Chap5_Fig4_Sensit_compl_mam.pdf", 3,3)
+sens_compl("mam")
+dev.off()
+
+pdf("Fig/Chap5_Fig4_Sensit_compl_rept.pdf", 3,3)
+sens_compl("rept")
+dev.off()
+
+
+ggarrange(scb, scm, scr, ncol = 3, nrow=1)
 
 ##### Fig 3 Sensitivity ~ Total SR ####
 
@@ -614,3 +768,76 @@ ggplot(data_high)+
   geom_sf(aes(fill=high_risk), color=NA) +
   scale_fill_manual(values = c("1" = "maroon", "0" = "wheat1", "other" = "lightpink"))+
   theme_classic()
+
+
+plot_vulnerability <- function(class){
+  dat1 <- dl_sensit[[class]] 
+  dat2 <- dl_expo_norm[[class]]
+  
+  dat_sf <- left_join(left_join(grid, dat1), dat2) %>%
+    replace_na(list(expo_max_min = 0, expo_log = 0, expo_rank = 0)) %>%
+    mutate(Exposure = expo_max_min/max(expo_max_min)) %>%
+    replace_na(list(SR_ias_a_max_min = 0, SR_ias_a_log = 0, SR_ias_a_rank = 0))%>%
+    rename(Sensitivity = SR_ias_a_max_min)
+  
+  data <- bi_class(dat_sf, x = Exposure, y = Sensitivity, 
+                   style = "fisher", dim = 3)
+  
+  data_vu <- data %>%
+    mutate(vu = case_when(
+      bi_class=="1-1" ~ "VL",
+      bi_class %in% c("1-2", "2-1") ~ "L",
+      bi_class %in% c("1-3", "3-1", "2-2") ~ "M",
+      bi_class %in% c("3-2", "2-3") ~ "H",
+      bi_class=="3-3" ~ "VH")) %>%
+    mutate(vu = factor(vu, ordered = T, levels = c("VL","L","M","H","VH")))
+  
+  table(data_vu$vu)
+  ggplot(data_vu)+
+    geom_sf(aes(fill=vu), color=NA) +
+    scale_fill_manual(values = c("VL" = "#FEECEB", 
+                                 "L" = "#FCC7C3", 
+                                 "M" = "#F88279", 
+                                 "H" = "#D63B2F", 
+                                 "VH" = "#7A221B"))+
+    theme_classic()
+}
+
+
+
+vb <- plot_vulnerability("bird")+
+  labs(title = "Aves")
+vm <- plot_vulnerability("mam")+
+  labs(title = "Mammalia")
+vr <- plot_vulnerability("rept")+
+  labs(title = "Reptilia")
+
+pdf("Fig/Fig4_vulnerability_tetrapods.pdf", 6, 5)
+ggarrange(vb, vm, vr, ncol= 2, nrow=2, common.legend = T)
+dev.off()
+
+
+
+
+# VU as the combination of E and S
+
+e <- ggarrange(eb, em, er,
+               ncol = 1, nrow = 3, legend = "none")
+s <- ggarrange(sb, sm, sr,
+               ncol = 1, nrow = 3, legend = "none")
+vu <- ggarrange(vb, vm, vr, 
+                ncol= 1, nrow=3, legend = "none")
+
+pdf("Fig/Fig2_Expo_sensib_VU.pdf", 8,6)
+ggarrange(e, s, vu, ncol = 3, common.legend = F)
+dev.off()
+
+legend_vu <- cowplot::get_legend(vr + theme(legend.direction = "horizontal"))
+
+
+pdf("Fig/Fig2_Legend_vu.pdf")
+grid.newpage()
+grid.draw(legend_vu)
+dev.off()
+
+

@@ -35,6 +35,13 @@ in_fold = "Output/Exposure/Exposure_raw/"
 all_sp_cells <- readRDS(paste0(in_fold, "RISK_21_grid_cells_310_IAS_", res, "km"))
 
 table(ias_x_native$scope, ias_x_native$severity)
+table(ias_x_native %>%
+        # we keep only natives associated to the modeled ias 
+        filter(ias_gbif_key %in% unique(all_sp_cells$new_key))%>%
+        rename(new_key = ias_gbif_key) %>%
+        filter(!redlistCategory %in% c("Extinct","Extinct in the Wild")) %>%
+        distinct(scientificName, className) %>%
+        pull(className))
 
 
 ias_x_nat_dd_ss <- ias_x_native %>%
@@ -68,7 +75,7 @@ table(all$redlistCategory, all$className)
 dd_bmr <- all %>% filter(redlistCategory=="Data Deficient") %>% pull(scientificName)
 
 # 46 birds, 839 mammals, 1487 reptiles
-
+table(all %>% distinct(scientificName, className) %>% pull(className))
 
 # calculate SR for each condition
 
