@@ -17,4 +17,4 @@ To be filled in...
 
 Please use the following citation:
 
-> Marino C (2024) Data and codes for Exposure and sensitivity of terrestrial vertebrates to biological invasions worldwide. URL: https://github.com/claramarino/predict_vulnerability.
+> Marino C (2024) Data and codes for Exposure and sensitivity of terrestrial vertebrates to biological invasions worldwide. URL: https://github.com/claramarino/BIVA_framework.
