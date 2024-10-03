@@ -239,7 +239,8 @@ dl_all_norm <- lapply(dl_all_norm, function(x){
 })
 
 # save sensitivity table
-saveRDS(dl_all_norm, paste0("Output/Sensitivity/RISK_33_sensit_norm_", res, "_km"))
+saveRDS(dl_all_norm, paste0("Output/Sensitivity/BIVA_13_sensit_norm_", res, "_km"))
 
-
+openxlsx::write.xlsx(dl_all_norm, file = paste0("Output/Sensitivity/BIVA_13_sensit_norm_", res, "_km.xlsx"))
+sf::st_write(grid_terr, paste0("Output/Sensitivity/Grid_", res, "_km.shp"))
 

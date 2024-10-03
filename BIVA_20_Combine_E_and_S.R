@@ -16,10 +16,17 @@ grid$cell_id = 1:nrow(grid)
 range(grid$grid_id)
 
 # load data
-dl_expo_norm <- readRDS(paste0("Output/Exposure/RISK_23_expo_norm_", res, "_km"))
-dl_sensit <- readRDS(paste0("Output/Sensitivity/RISK_33_sensit_norm_", res, "_km"))
+dl_expo_norm <- readRDS(paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
+dl_sensit <- readRDS(paste0("Output/Sensitivity/BIVA_13_sensit_norm_", res, "_km"))
 df_compl <- readRDS(paste0("Output/Exposure/RISK_22_Comp_smpl_eff_", res, "km"))
 df_compl_sens <- readRDS(paste0("Output/Sensitivity/Completeness/RISK_34_completeness_ed_se_", res))
+
+# openxlsx::write.xlsx(df_compl %>% sf::st_drop_geometry(), 
+#                      file = paste0("Output/Exposure/BIVA_20_expo_completeness_", res, "_km.xlsx"))
+# 
+# openxlsx::write.xlsx(df_compl_sens, 
+#                      file = paste0("Output/Sensitivity/BIVA_20_sensi_completeness_", res, "_km.xlsx"))
+
 
 ntot = nrow(grid)
 

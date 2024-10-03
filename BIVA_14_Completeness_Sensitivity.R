@@ -72,6 +72,7 @@ amr <- read.csv(paste0(fold_iucn, "amph_mam_rept/simple_summary.csv"))
 all <- bind_rows(bp, bnp, amr) %>%
   filter(className != "AMPHIBIA")
 table(all$redlistCategory, all$className)
+table(all$className)
 
 dd_bmr <- all %>% filter(redlistCategory=="Data Deficient") %>% pull(scientificName)
 

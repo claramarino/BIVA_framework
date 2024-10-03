@@ -43,6 +43,12 @@ ias_x_native_ok <- ias_x_native %>%
 
 sum(unique(all_sp_cells$new_key) %in% unique(ias_x_native_ok$new_key))
 
+# count how many IAS for each class
+length(unique(ias_x_native_ok %>% filter(className=="AVES") %>% pull(new_key)))
+length(unique(ias_x_native_ok %>% filter(className=="MAMMALIA") %>% pull(new_key)))
+length(unique(ias_x_native_ok %>% filter(className=="REPTILIA") %>% pull(new_key)))
+
+
 
 ###### Compute cell related metrics #####
 
@@ -210,7 +216,8 @@ hist(dl_all_norm$all_groups$expo_prod_rank)
 
 # save exposure table
 saveRDS(dl_all_norm, paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
-
+dl_all_norm <- readRDS(paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
+openxlsx::write.xlsx(dl_all_norm, file = paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km.xlsx"))
 
 
 
