@@ -2,6 +2,8 @@
 <!-- badges: start -->
 [![License:
 MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://choosealicense.com/licenses/mit/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14098915.svg)](https://doi.org/10.5281/zenodo.14098915)
+
 <!-- badges: end -->
 
 Scripts and data for reproducing the results obtained by Marino et al. in the paper **Exposure and sensitivity of terrestrial vertebrates to biological invasions worldwide**.
