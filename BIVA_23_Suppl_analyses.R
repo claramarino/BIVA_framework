@@ -20,13 +20,15 @@ library(biscale)
 res = "110" # 55km or 110km
 
 # load grid 
-grid <- readRDS(paste0("Output/RISK_32_grid_",res, "km"))
+grid <- readRDS("Data/derived-data/04_Grid_110km.rds")
 grid$cell_id = 1:nrow(grid)
 range(grid$grid_id)
 
 # load data
-dl_expo_norm <- readRDS(paste0("Output/Exposure/RISK_23_expo_norm_", res, "_km"))
-dl_sensit <- readRDS(paste0("Output/Sensitivity/RISK_33_sensit_norm_", res, "_km"))
+dl_expo_norm <- readRDS("Data/data-for-analyses/10_Exposure_normalized_110_km.rds")
+dl_sensit <- readRDS("Data/data-for-analyses/13_Sensitivity_normalized_110_km.rds")
+df_compl <- readRDS("Data/data-for-analyses/10_Completeness_Exposure_110_km.rds")
+df_compl_sens <- readRDS("Data/data-for-analyses/14_Completeness_Sensitivity_110_km.rds")
 
 
 #### 1 Relationships norm method ####
@@ -204,7 +206,7 @@ ggarrange(all_sr, all_range, all_impact, ncol = 1, nrow=3,
 
 #### 3 Sum vs product of exposure components #####
 
-sum_prod <- readRDS(paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
+sum_prod <- readRDS("Data/data-for-analyses/10_Exposure_normalized_110_km.rds")
 
 
 df_sum_prod <- sum_prod[["all_groups"]]
@@ -240,7 +242,7 @@ dev.off()
 
 #### 4 Sensitivity and species richness #####
 
-sr_all <- readRDS(paste0("Output/Sensitivity/SR_per_cell/RISK_33_SR_tot_ias_a_t_nt_", res))
+sr_all <- readRDS("Data/derived-data/05_Native_sp_richness_in_cells_110_km.rds")
 
 grid$cell_id = 1:nrow(grid)
 

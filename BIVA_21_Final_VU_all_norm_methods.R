@@ -16,13 +16,15 @@ library(biscale)
 res = "110" # 55km or 110km
 
 # load grid 
-grid <- readRDS(paste0("Output/RISK_32_grid_",res, "km"))
+grid <- readRDS("Data/derived-data/04_Grid_110km.rds")
 grid$cell_id = 1:nrow(grid)
 range(grid$grid_id)
 
 # load data
-dl_expo_norm <- readRDS(paste0("Output/Exposure/RISK_23_expo_norm_", res, "_km"))
-dl_sensit <- readRDS(paste0("Output/Sensitivity/RISK_33_sensit_norm_", res, "_km"))
+dl_expo_norm <- readRDS("Data/data-for-analyses/10_Exposure_normalized_110_km.rds")
+dl_sensit <- readRDS("Data/data-for-analyses/13_Sensitivity_normalized_110_km.rds")
+
+
 
 # What are the high/low vulnerability zones
 # Are they identical based on the normalization methods?

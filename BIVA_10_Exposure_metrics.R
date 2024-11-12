@@ -1,6 +1,6 @@
 # compute & normalize exposure metrics
 # save table for fig & analysis with sensitivity
-# separate by victim group
+# separate by taxonomic group for native species
 
 rm(list=ls())
 
@@ -9,21 +9,18 @@ library(tidyverse)
 
 ###### Data loading #####
 
-# select resolution
-res = "110" # 55km or 110km
-
 # Load occurrence ias
-in_fold = "Output/Exposure/Exposure_raw/"
-all_sp_cells <- readRDS(paste0(in_fold, "RISK_21_grid_cells_310_IAS_", res, "km"))
+
+all_sp_cells <- readRDS("Data/derived-data/01_310_IAS_occ_in_cells_110_km.rds")
 # cb de cellules avec au moins 1 IAS ?
 length(unique(all_sp_cells$grid_id))
 range(all_sp_cells$grid_id)
 
 # load ias list
-sp_info <- readRDS("Output/Native_exotic_range/RISK_14_ias_list_with_occ_ALL_DB_nat_exo")
+sp_info <- readRDS("Data/derived-data/02_310_IAS_species_information.rds")
 
 # load ias_x_native table
-ias_x_native <- readRDS("Data/RISK_03_ias_x_native_bmr_taxo_ok")
+ias_x_native <- readRDS("Data/derived-data/03_Natives_x_IAS_correspondance.rds")
 
 # do all ias in cells have associated natives in list ?
 sum(unique(all_sp_cells$new_key) %in% unique(ias_x_native$ias_gbif_key))
@@ -215,9 +212,11 @@ hist(dl_all_norm$all_groups$expo_prod_log)
 hist(dl_all_norm$all_groups$expo_prod_rank)
 
 # save exposure table
-saveRDS(dl_all_norm, paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
-dl_all_norm <- readRDS(paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
-openxlsx::write.xlsx(dl_all_norm, file = paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km.xlsx"))
+saveRDS(dl_all_norm, "Data/data-for-analyses/10_Exposure_normalized_110_km.rds")
+
+
+# dl_all_norm <- readRDS(paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
+# openxlsx::write.xlsx(dl_all_norm, file = paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km.xlsx"))
 
 
 

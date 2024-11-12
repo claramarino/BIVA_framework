@@ -11,15 +11,16 @@ library(biscale)
 res = "110" # 55km or 110km
 
 # load grid 
-grid <- readRDS(paste0("Output/RISK_32_grid_",res, "km"))
+grid <- readRDS("Data/derived-data/04_Grid_110km.rds")
 grid$cell_id = 1:nrow(grid)
 range(grid$grid_id)
 
 # load data
-dl_expo_norm <- readRDS(paste0("Output/Exposure/BIVA_10_expo_norm_", res, "_km"))
-dl_sensit <- readRDS(paste0("Output/Sensitivity/BIVA_13_sensit_norm_", res, "_km"))
-df_compl <- readRDS(paste0("Output/Exposure/RISK_22_Comp_smpl_eff_", res, "km"))
-df_compl_sens <- readRDS(paste0("Output/Sensitivity/Completeness/RISK_34_completeness_ed_se_", res))
+dl_expo_norm <- readRDS("Data/data-for-analyses/10_Exposure_normalized_110_km.rds")
+dl_sensit <- readRDS("Data/data-for-analyses/13_Sensitivity_normalized_110_km.rds")
+df_compl <- readRDS("Data/data-for-analyses/10_Completeness_Exposure_110_km.rds")
+df_compl_sens <- readRDS("Data/data-for-analyses/14_Completeness_Sensitivity_110_km.rds")
+
 
 # openxlsx::write.xlsx(df_compl %>% sf::st_drop_geometry(), 
 #                      file = paste0("Output/Exposure/BIVA_20_expo_completeness_", res, "_km.xlsx"))
