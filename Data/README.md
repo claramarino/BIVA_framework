@@ -6,11 +6,11 @@ Data for reproducing the results obtained by Marino et al. in the paper **Exposu
 
 ## Description of the data and file structure
 
-The data are divided into four main files related to the exposure and sensitivity of birds, mammals, and reptiles to biological invasions, as well as data completeness associated with these two metrics. We also provide one additional spatial file that for mapping the results and get the associated cells with all metric values.
+The data for analyses are divided into four main files related to the exposure and sensitivity of birds, mammals, and reptiles to biological invasions, as well as data completeness associated with these two metrics. They are all in [`data_for_analyses/`](https://github.com/claramarino/BIVA_framework/main/Data/data-for-analyses).  We also provide one additional spatial file for mapping the results and get the associated cells with all metric values, located in [`derived_data/`](https://github.com/claramarino/BIVA_framework/main/Data/derived_data).
 
 ### 1. Exposure to 304 IAS
 
-Data file BIVA_10_expo_norm_110_km.xlsx contains the exposure components and final values for each cell with at least one established alien species occurrence, for three normalization methods  (4 sheets x 6,629 lines x 16 columns).
+Data file 10_Exposure_normalized_110_km.rds contains the exposure components and final values for each cell with at least one established alien species occurrence, for three normalization methods  (4 sheets x 6,629 lines x 16 columns).
 
 | Column name            | Description                                                                                |
   | :--------------------- | :----------------------------------------------------------------------------------------- |
@@ -33,7 +33,7 @@ Data file BIVA_10_expo_norm_110_km.xlsx contains the exposure components and fin
   
   ### 2. Sensitivity of birds, mammals, and reptiles
   
-  The data file BIVA_13_sensit_norm_110_km.xlsx contains the sensitivity values for birds, mammals, and reptiles for each cell for three normalization methods (3 sheets x 16,052 lines x 4 columns).
+  The data file 13_Sensitivity_normalized_110_km.rds contains the sensitivity values for birds, mammals, and reptiles for each cell for three normalization methods (3 sheets x 16,052 lines x 4 columns).
 
 | **Column name**      | **Description**                                                   |
   | :------------------- | :---------------------------------------------------------------- |
@@ -44,7 +44,7 @@ Data file BIVA_10_expo_norm_110_km.xlsx contains the exposure components and fin
   
   ### 3. Completeness for exposure
   
-  The data file BIVA_20_expo_completeness_110_km.xlsx contains the completeness values associated with the exposure of all taxa for each cell (17,258 lines x 7 columns).
+  The data file 10_Completeness_Exposure_110_km.rds contains the completeness values associated with the exposure of all taxa for each cell (17,258 lines x 7 columns).
 
 | **Column name**    | **Description**                                                               |
   | :----------------- | :---------------------------------------------------------------------------- |
@@ -58,7 +58,7 @@ Data file BIVA_10_expo_norm_110_km.xlsx contains the exposure components and fin
   
   ### 4. Completeness for sensitivity
   
-  The data file BIVA_20_sensi_completeness_110_km.xlsx contains the completeness values associated with the sensitivity of birds, mammals, and reptiles for each cell (3 sheets x 16,052 lines x 10 columns).
+  The data file 14_Completeness_Sensitivity_110_km.rds contains the completeness values associated with the sensitivity of birds, mammals, and reptiles for each cell (3 sheets x 16,052 lines x 10 columns).
 
 | **Column name** | **Description**                                                                     |
   | :-------------- | :---------------------------------------------------------------------------------- |
@@ -75,7 +75,7 @@ Data file BIVA_10_expo_norm_110_km.xlsx contains the exposure components and fin
   
   ### 5. Land cell units (spatial file)
   
-  The file Grid_110_km.shp contains the spatial information associated with all the cells for which we calculated exposure, sensitivity, and completeness. The associated dataset contains a column "grid_id" for linking with exposure data, and a column "cell_id" for linking with sensitivity data.
+  The file 04_Grid_110km.rds contains the spatial information associated with all the cells for which we calculated exposure, sensitivity, and completeness. The associated dataset contains a column "grid_id" for linking with exposure data, and a column "cell_id" for linking with sensitivity data.
 
 ## Sharing/Access information
 
