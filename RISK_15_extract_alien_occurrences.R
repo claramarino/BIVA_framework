@@ -301,9 +301,66 @@ length(list.files(out_path))
 
 
 
+###### Save file source for reproductibility ######
+
+# load species list
+ias_in_iucn <- readRDS("Output/Native_exotic_range/RISK_11_IAS_sp_in_IUCN") %>%
+  filter(!is.na(taxonid)) %>% 
+  mutate(ias_name = tolower(ias_name)) %>% 
+  select(ias_name, scientific_name, kingdom:class, category, 
+         population_trend:terrestrial_system) %>%
+  distinct()
+
+# load associated key
+sp_info <- readRDS("Output/Native_exotic_range/RISK_11_ias_list_with_occ_IUCN_check")
 
 
+# bind tables
+ias_in_iucn_k <- left_join(ias_in_iucn, 
+                           sp_info %>% rename(ias_name = spe_lower) %>%
+                             distinct(ias_name, new_key), 
+                           by = "ias_name")
 
+# all species with info CABI, GRIIS
+sp_info <- readRDS("Output/Native_exotic_range/RISK_14_ias_list_with_occ_ALL_DB_nat_exo")
+
+
+info <- left_join(sp_info, ias_in_iucn_k)
+
+str(info)
+
+
+info_source <- info %>%
+  mutate(Source = if_else(!is.na(class), "IUCN v2022-2", "NA")) %>%
+  mutate(Source = if_else(class == "AVES", "Birdlife International v2020.1", Source)) %>%
+  mutate(Source = if_else(
+    scientific_name %in% c("Emoia jakati", "Gonatodes albogularis", 
+                           "Trachemys scripta", "Phelsuma dubia"), 
+    "GARD, Roll et al 2017", Source)) %>%
+  mutate(Source = if_else(nat_exo_info == "EXO_COUNTRY_GRIIS", "GRIIS, Pagad et al 2022", Source))
+  
+info_source$Source[info_source$new_species == "Batis maritima"] <- "https://doi.org/10.1079/cabicompendium.8562"
+info_source$Source[info_source$new_species == "Miconia hirta"] <-"https://doi.org/10.1079/cabicompendium.13934"
+info_source$Source[info_source$new_species == "Schistocerca nitens"] <-"https://doi.org/10.1079/cabicompendium.49834"
+info_source$Source[info_source$new_species == "Neustanthus phaseoloides"] <-"https://doi.org/10.1079/cabicompendium.45903"
+info_source$Source[info_source$new_species == "Vespula pensylvanica"] <-"https://doi.org/10.1079/cabicompendium.56670"
+info_source$Source[info_source$new_species %in% c("Anolis wattsii", "Bos frontalis",
+                                                  "Morelia imbricata")] <-"IUCN v2022-2"
+
+info_source$Source[info_source$new_species == "Lea floridensis"] <-"https://orthsoc.org/sina/131a.htm"
+
+info_source$Source[info_source$new_species == "Ceodes umbellata"] <-"https://www.monaconatureencyclopedia.com/pisonia-umbellifera/?lang=en"
+
+table(info_source$Source)
+
+info_source_ok <- info_source %>%
+  select(original_sciname:nat_exo_info, Source) %>%
+  select(-c(spe_lower, ias_in_iucn))
+
+table(info_source_ok$nat_exo_info)
+str(info_source_ok)
+openxlsx::write.xlsx(info_source_ok, 
+                     "data/derived-data/Alien_species_range_sources.xlsx")
 
 ######### BROUILLON ##########
 

@@ -25,7 +25,12 @@ df_compl_sens <- readRDS("Data/data-for-analyses/14_Completeness_Sensitivity_110
 # openxlsx::write.xlsx(df_compl %>% sf::st_drop_geometry(), 
 #                      file = paste0("Output/Exposure/BIVA_20_expo_completeness_", res, "_km.xlsx"))
 # 
-# openxlsx::write.xlsx(df_compl_sens, 
+# df_compl_sens <- lapply(df_compl_sens, function(x){
+#   x$ed[is.na(x$ed)] <- "NA"
+#   x$comp_prod[is.na(x$comp_prod)] <- "NA"
+#   return(x)
+# })
+# openxlsx::write.xlsx(df_compl_sens,
 #                      file = paste0("Output/Sensitivity/BIVA_20_sensi_completeness_", res, "_km.xlsx"))
 
 
