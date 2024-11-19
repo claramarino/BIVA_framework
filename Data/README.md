@@ -79,16 +79,12 @@ Data file 10_Exposure_normalized_110_km.rds contains the exposure components and
 
 ## Sharing/Access information
 
-Data and code supporting this article can also be found at:
-  
-  * [https://github.com/claramarino/BIVA_framework](https://github.com/claramarino/BIVA_framework)
-
 Raw data was derived from the following sources:
-  
-  * IUCN Red List of Threatened species: [https://www.iucnredlist.org/](https://www.iucnredlist.org/)
-* Global Biodiversity Information Facility: [https://www.gbif.org/](https://www.gbif.org/)
-* Global Register of Introduced and Invasive Species
+
+* Alien occurrences data were downloaded from the Global Biodiversity Information Facility (www.gbif.org). All DOIs associated with download requests on GBIF can be found in the file GBIF_download_doi.xlsx.
+* The exotic and native ranges of alien species used to filter the occurrences were derived from multiple sources (see Table S1 of the associated paper) including the IUCN Red List of threatened species (Version 2022-1,  https://www.iucnredlist.org/resources/spatial-data-download), the Global Register of Introduced and Invasive Alien Species (www.griis.org), the Global Assessment of Reptile Distributions (Version 1.1, https://doi.org/10.5061/dryad.83s7k), Birdlife International (Version 2020.1, https://datazone.birdlife.org/species/requestdis), and the CABI compendium in Invasive Species (https://www.cabidigitallibrary.org/product/qi). Details on the sources associated with each alien species are provided in the file Alien_species_range_sources.xlsx.
+* Native species ranges were accessed using the IUCN Red List of threatened species (Version 2022-1,  https://www.iucnredlist.org/resources/spatial-data-download) for mammals and reptiles, and Birdlife International (Version 2020.1, https://datazone.birdlife.org/species/requestdis) for birds.
 
 ## Code/Software
 
-All analyses were conducted using R software version 4.2.2 (R Core Team, 2022). The associated scripts are provided in the GitHub repository.
+All analyses were conducted using R software version 4.2.2 (R Core Team, 2022). The associated scripts are provided in the [GitHub repository](https://github.com/claramarino/BIVA_framework).
